@@ -2,6 +2,7 @@ import inspect
 import itertools
 import multiprocessing
 import os
+import time
 from copy import deepcopy
 from time import sleep
 from typing import Tuple, Union, List, Optional
@@ -349,6 +350,7 @@ class nnUNetPredictor(object):
             worker_list = [i for i in export_pool._pool]
             r = []
             for preprocessed in data_iterator:
+                start_time = time.time()
                 data = preprocessed['data']
                 if isinstance(data, str):
                     delfile = data
@@ -407,6 +409,9 @@ class nnUNetPredictor(object):
                     print(f'done with {os.path.basename(ofile)}')
                 else:
                     print(f'\nDone with image of shape {data.shape}:')
+
+                print("Done predicting for {} with {} seconds".format(os.path.basename(ofile), time.time() - start_time))
+
             ret = [i.get()[0] for i in r]
 
         if isinstance(data_iterator, MultiThreadedAugmenter):

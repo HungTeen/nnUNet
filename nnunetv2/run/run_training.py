@@ -19,7 +19,7 @@ from torch.backends import cudnn
 def find_free_network_port() -> int:
     """Finds a free port on localhost.
 
-    It is useful in single-node training when we don't want to connect to a real main node but have to set the
+    It is useful in single-node training when we don't want to connect to a real pangteen node but have to set the
     `MASTER_PORT` environment variable.
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

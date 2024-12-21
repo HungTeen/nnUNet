@@ -14,7 +14,7 @@ def get_allowed_n_proc_DA():
 
     The way it is implemented here is simply a look up table. We know the hostnames, CPU and GPU configurations of our
     systems and set the numbers accordingly. For example, a system with 4 GPUs and 48 threads can use 12 threads per
-    GPU without overloading the CPU (technically 11 because we have a main process as well), so that's what we use.
+    GPU without overloading the CPU (technically 11 because we have a pangteen process as well), so that's what we use.
     """
 
     if 'nnUNet_n_proc_DA' in os.environ.keys():

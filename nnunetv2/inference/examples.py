@@ -83,7 +83,7 @@ if __name__ == '__main__':
     # each element returned by data_iterator must be a dict with 'data', 'ofile' and 'data_properties' keys!
     # If 'ofile' is None, the result will be returned instead of written to a file
     # the iterator is responsible for performing the correct preprocessing!
-    # note how the iterator here does not use multiprocessing -> preprocessing will be done in the main thread!
+    # note how the iterator here does not use multiprocessing -> preprocessing will be done in the pangteen thread!
     # take a look at the default iterators for predict_from_files and predict_from_list_of_npy_arrays
     # (they both use predictor.predict_from_data_iterator) for inspiration!
     def my_iterator(list_of_input_arrs, list_of_input_props):
