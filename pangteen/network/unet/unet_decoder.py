@@ -5,10 +5,11 @@ from typing import Union, List, Tuple, Type
 
 from torch.nn.modules.dropout import _DropoutNd
 
-from block import StackedConvBlocks
-from helper import get_matching_convtransp
+from pangteen.network.helper import get_matching_convtransp
 from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
-from unet_encoder import PlainConvEncoder
+
+from pangteen.network.unet.block import StackedConvBlocks
+from pangteen.network.unet.unet_encoder import PlainConvEncoder
 
 
 class UNetDecoder(nn.Module):

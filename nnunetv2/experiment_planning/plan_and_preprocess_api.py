@@ -4,6 +4,7 @@ from typing import List, Type, Optional, Tuple, Union
 from batchgenerators.utilities.file_and_folder_operations import join, maybe_mkdir_p, load_json
 
 import nnunetv2
+import pangteen
 from nnunetv2.configuration import default_num_processes
 from nnunetv2.experiment_planning.dataset_fingerprint.fingerprint_extractor import DatasetFingerprintExtractor
 from nnunetv2.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
@@ -89,6 +90,14 @@ def plan_experiments(dataset_ids: List[int], experiment_planner_class_name: str 
     experiment_planner = recursive_find_python_class(join(nnunetv2.__path__[0], "experiment_planning"),
                                                      experiment_planner_class_name,
                                                      current_module="nnunetv2.experiment_planning")
+    '''
+    PangTeen 增加自己文件夹的查找。
+    '''
+    if experiment_planner is None:
+        experiment_planner = recursive_find_python_class(join(pangteen.__path__[0], "planner"),
+                                                         experiment_planner_class_name,
+                                                         current_module="pangteen.planner")
+
     plans_identifier = None
     for d in dataset_ids:
         _, plans_identifier = plan_experiment_dataset(d, experiment_planner, gpu_memory_target_in_gb,

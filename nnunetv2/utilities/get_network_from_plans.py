@@ -2,6 +2,7 @@ import pydoc
 import warnings
 from typing import Union
 
+import pangteen
 from nnunetv2.utilities.find_class_by_name import recursive_find_python_class
 from batchgenerators.utilities.file_and_folder_operations import join
 
@@ -26,7 +27,11 @@ def get_network_from_plans(arch_class_name, arch_kwargs, arch_kwargs_req_import,
         if nw_class is not None:
             print(f'FOUND IT: {nw_class}')
         else:
-            raise ImportError('Network class could not be found, please check/correct your plans file')
+            nw_class = recursive_find_python_class(join(pangteen.__path__[0], "network"),
+                                                   network_class.split(".")[-1],
+                                                   'pangteen.network')
+            if nw_class is None:
+                raise ImportError('Network class could not be found, please check/correct your plans file')
 
     if deep_supervision is not None:
         architecture_kwargs['deep_supervision'] = deep_supervision

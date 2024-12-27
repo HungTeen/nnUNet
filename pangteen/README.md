@@ -6,7 +6,7 @@ python -u pangteen/dataset/Dataset100_Ablation.py contrast label -d 102
 
 数据集预处理指令如下：
 ```bash
-nnUNetv2_plan_and_preprocess -d 101 102 -c 3d_fullres --verify_dataset_integrity
+nnUNetv2_plan_and_preprocess -d 101 -c 3d_fullres --verify_dataset_integrity
 ```
 
 模型训练代码如下：
@@ -29,4 +29,9 @@ nohup python -u pangteen/evaluate.py label -d 101 -c 3d_fullres -f 0 > main2.out
 时间分析代码如下：
 ```bash
 python -u pangteen/time_analyze.py main2.out
+```
+
+批量删除线程：
+```bash
+ps -def|grep nnUNetv2_train|cut -c 9-15|xargs kill -9
 ```

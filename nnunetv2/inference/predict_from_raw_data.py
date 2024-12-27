@@ -19,6 +19,7 @@ from torch.nn.parallel import DistributedDataParallel
 from tqdm import tqdm
 
 import nnunetv2
+import pangteen
 from nnunetv2.configuration import default_num_processes
 from nnunetv2.inference.data_iterators import PreprocessAdapterFromNpy, preprocessing_iterator_fromfiles, \
     preprocessing_iterator_fromnpy
@@ -95,10 +96,16 @@ class nnUNetPredictor(object):
         configuration_manager = plans_manager.get_configuration(configuration_name)
         # restore network
         num_input_channels = determine_num_input_channels(plans_manager, configuration_manager, dataset_json)
+        '''
+        PangTeen: 不知道复用代码？
+        '''
         trainer_class = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer"),
                                                     trainer_name, 'nnunetv2.training.nnUNetTrainer')
         if trainer_class is None:
-            raise RuntimeError(f'Unable to locate trainer class {trainer_name} in nnunetv2.training.nnUNetTrainer. '
+            trainer_class = recursive_find_python_class(join(pangteen.__path__[0], "trainer"),
+                                                        trainer_name, 'pangteen.trainer')
+            if trainer_class is None:
+                raise RuntimeError(f'Unable to locate trainer class {trainer_name} in nnunetv2.training.nnUNetTrainer. '
                                f'Please place it there (in any .py file)!')
         network = trainer_class.build_network_architecture(
             configuration_manager.network_arch_class_name,

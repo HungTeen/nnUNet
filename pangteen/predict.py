@@ -49,8 +49,8 @@ def predict_entry_point():
                              'multiple configurations.')
     parser.add_argument('--continue_prediction', action='store_true',
                         help='Continue an aborted previous prediction (will not overwrite existing files)')
-    parser.add_argument('-chk', type=str, required=False, default='checkpoint_final.pth',
-                        help='Name of the checkpoint you want to use. Default: checkpoint_final.pth')
+    parser.add_argument('-chk', type=str, required=False, default='best',
+                        help='Name of the checkpoint you want to use. (best, final, latest)')
     parser.add_argument('-npp', type=int, required=False, default=3,
                         help='Number of processes used for preprocessing. More is not always better. Beware of '
                              'out-of-RAM issues. Default: 3')
@@ -86,12 +86,14 @@ def predict_entry_point():
         input_folder = args.i
 
     if args.o is None:
-        output_folder = get_specific_folder(config.ablation_predict_folder, args.d, args.tr, args.p, args.c, folds)
+        output_folder = get_specific_folder(config.predict_folder, args.d, args.tr, args.p, args.c, folds)
     else:
         output_folder = args.o
 
     if not isdir(output_folder):
         maybe_mkdir_p(output_folder)
+
+    checkpoint_file = 'checkpoint_{}.pth'.format(args.chk)
 
     # slightly passive aggressive haha
     assert args.part_id < args.num_parts, 'Do you even read the documentation? See nnUNetv2_predict -h.'
@@ -123,7 +125,7 @@ def predict_entry_point():
     predictor.initialize_from_trained_model_folder(
         model_folder,
         folds,
-        checkpoint_name=args.chk
+        checkpoint_name=checkpoint_file
     )
 
     predictor.predict_from_files(input_folder, output_folder, save_probabilities=args.save_probabilities,

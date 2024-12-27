@@ -1,7 +1,7 @@
 
 from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
-from helper import *
+from pangteen.network.helper import *
 import torch
 from torch import nn
 from typing import Union, Type, List, Tuple
@@ -77,3 +77,32 @@ class PlainConvUNet(nn.Module):
     @staticmethod
     def initialize(module):
         InitWeights_He(1e-2)(module)
+
+
+if __name__ == "__main__":
+    network = PlainConvUNet(
+        input_channels=1,
+        n_stages=6,
+        features_per_stage= [32, 64, 128, 256, 320, 320],
+        conv_op= nn.Conv3d,
+        kernel_sizes = [[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
+        strides = [[1, 1, 1], [1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
+        n_conv_per_stage=[2, 2, 2, 2, 2, 2],
+        num_classes=2,
+        n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
+        conv_bias= True,
+        deep_supervision=True
+    ).cuda()
+
+    x = torch.zeros((2, 1, 20, 320, 256), requires_grad=False).cuda()
+
+    with torch.autocast(device_type='cuda', enabled=True):
+        print(x.device)
+        pred = network(x)
+        for y in pred:
+            print(y.size())
+
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(count_parameters(network))

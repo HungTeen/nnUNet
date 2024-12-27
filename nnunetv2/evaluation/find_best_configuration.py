@@ -273,7 +273,7 @@ def find_best_configuration_entry_point():
     parser = argparse.ArgumentParser()
     parser.add_argument('dataset_name_or_id', type=str, help='Dataset Name or id')
     parser.add_argument('-p', nargs='+', required=False, default=['nnUNetPlans'],
-                        help='List of plan identifiers. Default: nnUNetPlans')
+                        help='List of planner identifiers. Default: nnUNetPlans')
     parser.add_argument('-c', nargs='+', required=False, default=['2d', '3d_fullres', '3d_lowres', '3d_cascade_fullres'],
                         help="List of configurations. Default: ['2d', '3d_fullres', '3d_lowres', '3d_cascade_fullres']")
     parser.add_argument('-tr', nargs='+', required=False, default=['nnUNetTrainer'],

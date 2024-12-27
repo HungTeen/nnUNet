@@ -19,6 +19,7 @@ from nnunetv2.utilities.default_n_proc_DA import get_allowed_n_proc_DA
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
 from nnunetv2.utilities.json_export import recursive_fix_for_json_export
 from nnunetv2.utilities.utils import get_filenames_of_train_images_and_targets
+from pangteen import config
 
 
 class ExperimentPlanner(object):
@@ -345,6 +346,7 @@ class ExperimentPlanner(object):
                                                                  self.UNet_featuremap_min_edge_length,
                                                                  999999)
 
+            # 减少一层。
             num_stages = len(pool_op_kernel_sizes)
             architecture_kwargs['arch_kwargs'].update({
                 'n_stages': num_stages,
@@ -354,6 +356,7 @@ class ExperimentPlanner(object):
                 'n_conv_per_stage': self.UNet_blocks_per_stage_encoder[:num_stages],
                 'n_conv_per_stage_decoder': self.UNet_blocks_per_stage_decoder[:num_stages - 1],
             })
+
             if _keygen(patch_size, pool_op_kernel_sizes) in _cache.keys():
                 estimate = _cache[_keygen(patch_size, pool_op_kernel_sizes)]
             else:
@@ -366,6 +369,19 @@ class ExperimentPlanner(object):
                     architecture_kwargs['_kw_requires_import'],
                 )
                 _cache[_keygen(patch_size, pool_op_kernel_sizes)] = estimate
+
+        '''
+        PangTeen: 通过配置项来控制网络的最大深度。
+        '''
+        unet_stages = min(num_stages, config.max_unet_stages)
+        architecture_kwargs['arch_kwargs'].update({
+            'n_stages': unet_stages,
+            'kernel_sizes': conv_kernel_sizes[:unet_stages],
+            'strides': pool_op_kernel_sizes[:unet_stages],
+            'features_per_stage': _features_per_stage(unet_stages, max_num_features),
+            'n_conv_per_stage': self.UNet_blocks_per_stage_encoder[:unet_stages],
+            'n_conv_per_stage_decoder': self.UNet_blocks_per_stage_decoder[:unet_stages - 1],
+        })
 
         # alright now let's determine the batch size. This will give self.UNet_min_batch_size if the while loop was
         # executed. If not, additional vram headroom is used to increase batch size

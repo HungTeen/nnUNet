@@ -1,6 +1,7 @@
 import inspect
 import multiprocessing
 import os
+import pydoc
 import shutil
 import sys
 import warnings
@@ -343,7 +344,7 @@ class nnUNetTrainer(object):
 
     def _set_batch_size_and_oversample(self):
         if not self.is_ddp:
-            # set batch size to what the plan says, leave oversample untouched
+            # set batch size to what the planner says, leave oversample untouched
             self.batch_size = self.configuration_manager.batch_size
         else:
             # batch size is distributed over DDP workers and we need to change oversample_percent for each worker
@@ -500,7 +501,7 @@ class nnUNetTrainer(object):
             self.print_to_log_file(f"\nThis is the configuration used by this "
                                    f"training:\nConfiguration name: {self.configuration_name}\n",
                                    self.configuration_manager, '\n', add_timestamp=False)
-            self.print_to_log_file('These are the global plan.json settings:\n', dct, '\n', add_timestamp=False)
+            self.print_to_log_file('These are the global planner.json settings:\n', dct, '\n', add_timestamp=False)
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(self.network.parameters(), self.initial_lr, weight_decay=self.weight_decay,
@@ -895,7 +896,8 @@ class nnUNetTrainer(object):
         if isinstance(mod, OptimizedModule):
             mod = mod._orig_mod
 
-        mod.decoder.deep_supervision = enabled
+        if hasattr(mod, 'decoder'):
+            mod.decoder.deep_supervision = enabled
 
     def on_train_start(self):
         # dataloaders must be instantiated here (instead of __init__) because they need access to the training data

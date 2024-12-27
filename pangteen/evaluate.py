@@ -208,7 +208,7 @@ def main():
 
     folds = [i if i == 'all' else int(i) for i in args.f]
     if args.i is None:
-        result_folder = get_specific_folder(config.ablation_predict_folder, args.d, args.tr, args.p, args.c, folds)
+        result_folder = get_specific_folder(config.predict_folder, args.d, args.tr, args.p, args.c, folds)
     else:
         result_folder = args.i
 

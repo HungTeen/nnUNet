@@ -50,6 +50,7 @@ def get_pool_and_conv_props(spacing, patch_size, min_feature_map_size, max_numpo
     kernel_size = [1] * dim
 
     while True:
+        # 保证还有能下采样的维度。
         # exclude axes that we cannot pool further because of min_feature_map_size constraint
         valid_axes_for_pool = [i for i in range(dim) if current_size[i] >= 2*min_feature_map_size]
         if len(valid_axes_for_pool) < 1:

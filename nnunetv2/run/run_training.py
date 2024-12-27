@@ -8,6 +8,8 @@ import torch.cuda
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from batchgenerators.utilities.file_and_folder_operations import join, isfile, load_json
+
+import pangteen.trainer
 from nnunetv2.paths import nnUNet_preprocessed
 from nnunetv2.run.load_pretrained_weights import load_pretrained_weights
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
@@ -40,7 +42,11 @@ def get_trainer_from_args(dataset_name_or_id: Union[int, str],
     nnunet_trainer = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer"),
                                                 trainer_name, 'nnunetv2.training.nnUNetTrainer')
     if nnunet_trainer is None:
-        raise RuntimeError(f'Could not find requested nnunet trainer {trainer_name} in '
+        # 修改来适配自己的 Trainer。
+        nnunet_trainer = recursive_find_python_class(join(pangteen.__path__[0], "trainer"),
+                                                     trainer_name, 'pangteen.trainer')
+        if nnunet_trainer is None:
+            raise RuntimeError(f'Could not find requested nnunet trainer {trainer_name} in '
                            f'nnunetv2.training.nnUNetTrainer ('
                            f'{join(nnunetv2.__path__[0], "training", "nnUNetTrainer")}). If it is located somewhere '
                            f'else, please move it there.')
