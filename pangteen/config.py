@@ -1,8 +1,5 @@
 from os.path import join
 
-# 模型相关。
-max_unet_stages = 6
-
 # 标注相关。
 area_label = 1
 label_map = {
@@ -16,8 +13,14 @@ ablation_task_name = 'Ablation'
 ablation_base_folder = join(my_folder, ablation_task_name)  # 项目数据的根路径。
 ablation_origin_folder = join(ablation_base_folder, 'origin')  # 存放最原始的图像，未经任何预处理。
 ablation_origin_image_folder = join(ablation_origin_folder, 'data')
-origin_label_folder = join(ablation_origin_folder, 'label')
+ablation_origin_label_folder = join(ablation_origin_folder, 'label')
 ablation_origin_contrast_folder = join(ablation_origin_folder, 'contrast')
 ablation_origin_split_folder = join(ablation_origin_folder, 'test_split')
+
+my_task_name = 'MyAblation'
+my_base_folder = join(my_folder, my_task_name)  # 项目数据的根路径。
+my_image_folder = join(my_base_folder, 'image')
+my_label_folder = join(my_base_folder, 'label')
+my_split_folder = join(my_base_folder, 'test_split')
 
 predict_folder = join(my_folder, 'predict')  # 存放模型预测结果。

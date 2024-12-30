@@ -33,18 +33,7 @@ def copy_properties(new_image, old_image):
     new_image.SetDirection(old_image.GetDirection())
 
 
-def read_image(path, name):
-    file_path = os.path.join(path, name)
-    if os.path.isfile(file_path):
-        image = silk.ReadImage(file_path)
-        array = silk.GetArrayFromImage(image)  # numpy
-        array = array.transpose([1, 2, 0])
-        return image, array
-
-    return None, None
-
-
-def read_image_new(path, name=None) -> tuple[Image, ndarray, ndarray[Any, dtype[Any]]]:
+def read_image(path, name=None) -> tuple[Image, ndarray, ndarray[Any, dtype[Any]]]:
     file_path = path if name is None else os.path.join(path, name)
     if os.path.isfile(file_path):
         image = silk.ReadImage(file_path)
@@ -76,22 +65,7 @@ def save_data_new(new_image, path, spacing=None):
     silk.WriteImage(image, wrap_niigz(path))
 
 
-def save_image(new_image, old_image, filename, name, path=None):
-    if path is not None:
-        maybe_mkdir(path)
-    new_name = replace_filename(filename, name)
-    save_image2(new_image, old_image, new_name, path)
-
-
-def save_image2(new_image, old_image, filename, path=None):
-    if path is not None:
-        maybe_mkdir(path)
-    image = silk.GetImageFromArray(new_image.transpose([2, 0, 1]), isVector=False)
-    copy_properties(image, old_image)
-    silk.WriteImage(image, os.path.join(path, filename) if path is not None else filename)
-
-
-def save_image_new(new_image, old_image, path, filename, name=None, overwrite=True, spacing=None):
+def save_image(new_image, old_image, path, filename, name=None, overwrite=True, spacing=None):
     if name is not None:
         filename = replace_filename(filename, name)
     maybe_mkdir(path)

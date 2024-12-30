@@ -87,6 +87,11 @@ class ExperimentPlanner(object):
             _maybe_copy_splits_file(join(self.raw_dataset_folder, 'splits_final.json'),
                                     join(preprocessed_folder, 'splits_final.json'))
 
+        '''
+        PangTeen Edit: 增加层数限制。
+        '''
+        self.max_stages = 999999
+
     def determine_reader_writer(self):
         example_image = self.dataset[self.dataset.keys().__iter__().__next__()]['images'][0]
         return determine_reader_writer_from_dataset_json(self.dataset_json, example_image)
@@ -373,7 +378,7 @@ class ExperimentPlanner(object):
         '''
         PangTeen: 通过配置项来控制网络的最大深度。
         '''
-        unet_stages = min(num_stages, config.max_unet_stages)
+        unet_stages = min(num_stages, self.max_stages)
         architecture_kwargs['arch_kwargs'].update({
             'n_stages': unet_stages,
             'kernel_sizes': conv_kernel_sizes[:unet_stages],
