@@ -272,6 +272,7 @@ class ExperimentPlanner(object):
         # this is different from how nnU-Net v1 does it!
         # todo patch size can still get too large because we pad the patch size to a multiple of 2**n
         initial_patch_size = np.array([min(i, j) for i, j in zip(initial_patch_size, median_shape[:len(spacing)])])
+        print(f"initial patch size: {initial_patch_size}")
 
         # use that to get the network topology. Note that this changes the patch_size depending on the number of
         # pooling operations (must be divisible by 2**num_pool in each axis)

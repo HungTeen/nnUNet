@@ -18,4 +18,4 @@ if __name__ == '__main__':
         x = round(x, 2)
         y = round(y, 2)
         z = round(z, 2)
-        print("Real Size: ({}, {}, {}) -> ({}, {}, {})".format(x, y, z, x, y, z / 2.5))
+        print("Real Size: ({}, {}, {}) -> ({}, {}, {})".format(array.shape[0], array.shape[1], array.shape[2], x, y, z / 2.5))

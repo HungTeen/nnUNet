@@ -83,6 +83,9 @@ def save_image_raw(new_image, old_image, name):
     copy_properties(image, old_image)
     silk.WriteImage(image, wrap_niigz(name))
 
+def print_error(value):
+    print("error: ", value)
+
 def maybe_mkdir(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 

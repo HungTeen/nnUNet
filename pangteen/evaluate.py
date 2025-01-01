@@ -67,7 +67,7 @@ def get_worst_val(name):
 
 class MetricManager:
 
-    def __init__(self, result_folder, label_folder = config.origin_label_folder):
+    def __init__(self, result_folder, label_folder):
         """
         Args:
         """
@@ -154,8 +154,8 @@ class ImageInfo:
     def __init__(self, manager: MetricManager, filename):
         start_time = time()
         self.filename = filename
-        self.predict_image, self.predict, _ = utils.read_image_new(manager.predict_result_folder, filename)
-        self.gt_image, self.gt, _ = utils.read_image_new(manager.label_folder, self.filename)
+        self.predict_image, self.predict, _ = utils.read_image(manager.predict_result_folder, filename)
+        self.gt_image, self.gt, _ = utils.read_image(manager.label_folder, self.filename)
         self.confusion_matrix = m.ConfusionMatrix()
         print("cost {} seconds on initialize image".format(time() - start_time))
 
@@ -212,7 +212,7 @@ def main():
     else:
         result_folder = args.i
 
-    gt_folder = os.path.join(config.ablation_origin_folder, args.gt_folder)
+    gt_folder = os.path.join(config.my_folder, args.gt_folder)
     manager = MetricManager(result_folder=result_folder, label_folder=gt_folder)
     manager.evaluate()
 

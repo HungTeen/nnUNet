@@ -1,5 +1,7 @@
 from os.path import join
 
+max_cpu_cnt = 6
+
 # 标注相关。
 area_label = 1
 label_map = {

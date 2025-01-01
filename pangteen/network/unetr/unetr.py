@@ -17,12 +17,20 @@ from typing import Iterable, Any
 import numpy as np
 import torch
 import torch.nn as nn
+from monai.networks.blocks import UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock, UnetOutBlock
 from monai.networks.nets import ViT
 from monai.utils import ensure_tuple_rep
-
-from pangteen.network.unetr.dynunet_blocks import UnetOutBlock
-from pangteen.network.unetr.blocks import UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
-
+'''
+ViT:
+    Embedding: PatchEmbeddingBlock
+        PatchEmbedding: 将图像分割成patch（默认16x16x16)，然后将XYZ三个维度合并为一个维度。
+        PositionalEmbedding: 嵌入位置编码。
+    Transformer: TransformerBlock
+        SelfAttentionBlock: 自注意力机制。
+            投影：将Channel扩大三倍，然后分为Q、K、V三个部分。
+            计算：根据公式计算。
+        MLPBlock: 多层感知机。
+'''
 class UNETR(nn.Module):
     """
     UNETR based on: "Hatamizadeh et al.,

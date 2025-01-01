@@ -1,5 +1,7 @@
 import os.path
 from collections import OrderedDict
+from multiprocessing import Pool
+from time import time
 
 import numpy as np
 from batchgenerators.augmentations.utils import resize_segmentation
@@ -106,17 +108,39 @@ def resample_data_or_seg(data, new_shape, is_seg, axis=None, order=3, do_separat
         print("no resampling necessary")
         return data
 
+
+def transform(origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename, target_filename):
+    print("Processing: ", filename, " -> ", target_filename)
+    targetXYSize = 256
+    targetZSpacing = 2.5
+    data_image, data_array, data_spacing = utils.read_image(origin_image_folder, filename)
+    label_image, label_array, label_spacing = utils.read_image(origin_label_folder, filename)
+    assert data_spacing[0] == label_spacing[0] and data_spacing[1] == label_spacing[1] and data_spacing[2] == \
+           label_spacing[2]
+    assert data_array.shape == label_array.shape
+    # Resize the data and label.
+    x, y, z = data_array.shape[0] * data_spacing[0], data_array.shape[1] * data_spacing[1], data_array.shape[2] * \
+              data_spacing[2]
+    targetX, targetY, targetZ = targetXYSize, targetXYSize, int(z / targetZSpacing)
+    targetSpacing = [x / targetX, y / targetY, z / targetZ]
+    targetData = resample(data_array, [targetX, targetY, targetZ], False)
+    targetLabel = resample(label_array, [targetX, targetY, targetZ], True)
+
+    # Save the data and label.
+    utils.save_image(targetData, data_image, target_image_folder, target_filename, spacing=targetSpacing)
+    utils.save_image(targetLabel, label_image, target_label_folder, target_filename, spacing=targetSpacing)
+
 if __name__ == '__main__':
     '''
     将原始Ablation数据的尺寸和Spacing进行转换，方便适配不同的模型。
+    python -u pangteen/ablation/ablation_transform.py
+    nohup python -u pangteen/ablation/ablation_transform.py > main3.out 2>&1 &
     '''
     origin_image_folder = config.ablation_origin_image_folder
     origin_label_folder = config.ablation_origin_label_folder
     target_image_folder = config.my_image_folder
     target_label_folder = config.my_label_folder
 
-    targetXYSize = 448
-    targetZSpacing = 2.5
     case_id = 0
 
     rows = []
@@ -125,29 +149,22 @@ if __name__ == '__main__':
     utils.maybe_mkdir(target_image_folder)
     utils.maybe_mkdir(target_label_folder)
 
-    for filename in utils.next_file(origin_image_folder, sort=True):
-        data_image, data_array, data_spacing = utils.read_image(origin_image_folder, filename)
-        label_image, label_array, label_spacing = utils.read_image(origin_label_folder, filename)
-        assert data_spacing[0] == label_spacing[0] and data_spacing[1] == label_spacing[1] and data_spacing[2] == label_spacing[2]
-        assert data_array.shape == label_array.shape
+    p = Pool(config.max_cpu_cnt)  # 多进程。
+    print("=========> Start transform tasks !")
+    start_time = time()
 
+    for filename in utils.next_file(origin_image_folder, sort=True):
         # Rename the file.
         target_filename = 'Ablation_{:04d}.nii.gz'.format(case_id)
         case_id += 1
-
-        # Resize the data and label.
-        x, y, z = data_array.shape[0] * data_spacing[0], data_array.shape[1] * data_spacing[1], data_array.shape[2] * data_spacing[2]
-        targetX, targetY, targetZ = targetXYSize, targetXYSize, int(z / targetZSpacing)
-        targetSpacing = [x / targetX, y / targetY, targetZ * targetZSpacing / z]
-        targetData = resample(data_array, [targetX, targetY, targetZ], False)
-        targetLabel = resample(label_array, [targetX, targetY, targetZ], True)
-
-        # Save the data and label.
-        utils.save_image(targetData, data_image, target_image_folder, target_filename, spacing=targetSpacing)
-        utils.save_image(targetLabel, label_image, target_label_folder, target_filename, spacing=targetSpacing)
 
         # Save Mapping.
         rows.append(filename)
         mapping_table.append([target_filename])
 
+        p.apply_async(transform, args=(origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename, target_filename))
+
     pd.DataFrame(mapping_table, index=rows, columns=['new_name']).to_excel('ablation_mapping.xlsx')
+    p.close()
+    p.join()
+    print("=========> Finish all transforms ! Cost {} seconds.".format(time() - start_time))
