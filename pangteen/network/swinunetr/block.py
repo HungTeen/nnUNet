@@ -438,6 +438,8 @@ class BasicLayer(nn.Module):
         if len(x_shape) == 5:
             b, c, d, h, w = x_shape
             window_size, shift_size = get_window_size((d, h, w), self.window_size, self.shift_size)
+            # # 替代 einops.rearrange(x, "b c d h w -> b d h w c")
+            # x = x.permute(0, 2, 3, 4, 1)  # 调整维度顺序 (b, c, d, h, w) -> (b, d, h, w, c)
             x = rearrange(x, "b c d h w -> b d h w c")
             dp = int(np.ceil(d / window_size[0])) * window_size[0]
             hp = int(np.ceil(h / window_size[1])) * window_size[1]
@@ -448,6 +450,8 @@ class BasicLayer(nn.Module):
             x = x.view(b, d, h, w, -1)
             if self.downsample is not None:
                 x = self.downsample(x)
+            # # 替代 rearrange(x, "b d h w c -> b c d h w")
+            # x = x.permute(0, 4, 1, 2, 3)  # 将 (b, d, h, w, c) 转换为 (b, c, d, h, w)
             x = rearrange(x, "b d h w c -> b c d h w")
 
         elif len(x_shape) == 4:

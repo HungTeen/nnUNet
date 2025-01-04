@@ -15,16 +15,16 @@ class HTTrainer(nnUNetTrainer):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
         self.num_epochs = 500
 
-
     @staticmethod
-    def build_network_architecture(architecture_class_name: str,
-                                   arch_init_kwargs: dict,
+    def update_network_args(arch_init_kwargs: dict,
                                    arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
                                    num_input_channels: int,
                                    num_output_channels: int,
-                                   enable_deep_supervision: bool = True) -> nn.Module:
+                                   enable_deep_supervision: bool,
+                                   invalid_args: list[str] = None,
+                                   print_args: bool = False) -> dict:
         """
-        让模型选择变成继承制的，不用每次去改 Plan。
+        构建模型的通用部分。
         """
         architecture_kwargs = dict(**arch_init_kwargs)
         for ri in arch_init_kwargs_req_import:
@@ -37,7 +37,29 @@ class HTTrainer(nnUNetTrainer):
         architecture_kwargs['input_channels'] = num_input_channels
         architecture_kwargs['num_classes'] = num_output_channels
 
-        print("Look ! It's UNet : {}", architecture_kwargs)
+        if invalid_args:
+            for i in invalid_args:
+                architecture_kwargs.pop(i)
+
+        if print_args:
+            print("Look ! It's architecture args : {}", architecture_kwargs)
+
+        return architecture_kwargs
+
+
+
+    @staticmethod
+    def build_network_architecture(architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True) -> nn.Module:
+        """
+        让模型选择变成继承制的，不用每次去改 Plan。
+        """
+        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import, num_input_channels, num_output_channels, enable_deep_supervision)
+
         network = PlainConvUNet(**architecture_kwargs)
 
         if hasattr(network, 'initialize'):

@@ -14,9 +14,9 @@ import torch.nn as nn
 import torch
 from functools import partial
 
+from mamba_ssm import Mamba
 from monai.networks.blocks.dynunet_block import UnetOutBlock
 from monai.networks.blocks.unetr_block import UnetrBasicBlock, UnetrUpBlock
-from mamba_ssm import Mamba
 import torch.nn.functional as F
 
 
@@ -59,8 +59,8 @@ class MambaLayer(nn.Module):
             d_state=d_state,  # SSM state expansion factor
             d_conv=d_conv,  # Local convolution width
             expand=expand,  # Block expansion factor
-            bimamba_type="v3",
-            nslices=num_slices,
+            # bimamba_type="v3",
+            # nslices=num_slices,
         )
 
     def forward(self, x):
@@ -201,8 +201,8 @@ class MambaEncoder(nn.Module):
 class SegMamba(nn.Module):
     def __init__(
             self,
-            in_chans=1,
-            out_chans=13,
+            input_channels=1,
+            num_classes=13,
             depths=[2, 2, 2, 2],
             feat_size=[48, 96, 192, 384],
             drop_path_rate=0,
@@ -212,19 +212,20 @@ class SegMamba(nn.Module):
             conv_block: bool = True,
             res_block: bool = True,
             spatial_dims=3,
+            **invalid_args
     ) -> None:
         super().__init__()
 
         self.hidden_size = hidden_size
-        self.in_chans = in_chans
-        self.out_chans = out_chans
+        self.in_chans = input_channels
+        self.out_chans = num_classes
         self.depths = depths
         self.drop_path_rate = drop_path_rate
         self.feat_size = feat_size
         self.layer_scale_init_value = layer_scale_init_value
 
         self.spatial_dims = spatial_dims
-        self.vit = MambaEncoder(in_chans,
+        self.vit = MambaEncoder(input_channels,
                                 depths=depths,
                                 dims=feat_size,
                                 drop_path_rate=drop_path_rate,

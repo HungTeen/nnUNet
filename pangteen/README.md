@@ -13,8 +13,8 @@ nnUNetv2_plan_and_preprocess -d 201 -c 3d_fullres -pl MyDefault --verify_dataset
 
 模型训练代码如下：
 ```bash
-CUDA_VISIBLE_DEVICES=2 nohup nnUNetv2_train 101 3d_fullres 0 -num_gpus 1 > main.out 2>&1 &
-CUDA_VISIBLE_DEVICES=2 nohup nnUNetv2_train 101 3d_fullres 0 -pl stage5Plans -tr MedNeXtTrainer -num_gpus 1 > main.out 2>&1 &
+CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 101 3d_fullres 0 -num_gpus 1 > main.out 2>&1 &
+CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 101 3d_fullres 0 -p stage5Plans -tr MedNeXtTrainer -num_gpus 1 > main.out 2>&1 &
 ```
 
 模型预测代码如下：

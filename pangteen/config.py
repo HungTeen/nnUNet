@@ -1,6 +1,7 @@
 from os.path import join
 
 max_cpu_cnt = 6
+ablation_patch_size = (64, 128, 128)
 
 # 标注相关。
 area_label = 1

@@ -3,6 +3,7 @@ from typing import Union, List, Tuple
 import numpy as np
 
 from nnunetv2.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
+from pangteen import config
 from pangteen.network.helper import get_matching_instancenorm, convert_dim_to_conv_op
 
 
@@ -15,10 +16,11 @@ class MyDefault(ExperimentPlanner):
         super().__init__(dataset_name_or_id, gpu_memory_target_in_gb, preprocessor_name, plans_name,
                          overwrite_target_spacing, suppress_transpose)
         self.batch_size = 2
-        self.patch_size = (64, 128, 128)
+        self.patch_size = config.ablation_patch_size
         self.num_stages = 6
         self.features_per_stage = [32, 64, 128, 256, 320, 320, 320, 320, 320]
         self.conv_kernel_sizes = [[3] * len(self.patch_size)] * 10
+        self.strides = None
 
 
     def get_plans_for_configuration(self,
@@ -31,20 +33,23 @@ class MyDefault(ExperimentPlanner):
         num_stages = self.num_stages
 
         norm = get_matching_instancenorm(unet_conv_op)
-        strides = []
-        cur_shape = list(self.patch_size)
-        while len(strides) < num_stages:
-            stride = []
-            for dim in range(len(cur_shape)):
-                if cur_shape[dim] > self.UNet_featuremap_min_edge_length:
-                    stride.append(2)
-                    cur_shape[dim] = int(np.ceil(cur_shape[dim] / 2))
-                else:
-                    stride.append(1)
-            strides.append(stride)
+        if self.strides is None:
+            strides = []
+            cur_shape = list(self.patch_size)
+            while len(strides) < num_stages:
+                stride = []
+                for dim in range(len(cur_shape)):
+                    if cur_shape[dim] > self.UNet_featuremap_min_edge_length:
+                        stride.append(2)
+                        cur_shape[dim] = int(np.ceil(cur_shape[dim] / 2))
+                    else:
+                        stride.append(1)
+                strides.append(stride)
 
-        # 反转 strides
-        strides = strides[::-1]
+            # 反转 strides
+            strides = strides[::-1]
+        else:
+            strides = self.strides
 
         architecture_kwargs = {
             'network_class_name': self.UNet_class.__module__ + '.' + self.UNet_class.__name__,
@@ -91,3 +96,34 @@ class MyDefault(ExperimentPlanner):
             'architecture': architecture_kwargs
         }
         return plan
+
+
+class MyStage5(MyDefault):
+    def __init__(self, dataset_name_or_id: Union[str, int],
+                 gpu_memory_target_in_gb: float = 8,
+                 preprocessor_name: str = 'DefaultPreprocessor', plans_name: str = 'stage5Plans',
+                 overwrite_target_spacing: Union[List[float], Tuple[float, ...]] = None,
+                 suppress_transpose: bool = False):
+        super().__init__(dataset_name_or_id, gpu_memory_target_in_gb, preprocessor_name, plans_name, overwrite_target_spacing, suppress_transpose)
+        self.num_stages = 5
+
+
+class MyStage4(MyDefault):
+    def __init__(self, dataset_name_or_id: Union[str, int],
+                 gpu_memory_target_in_gb: float = 8,
+                 preprocessor_name: str = 'DefaultPreprocessor', plans_name: str = 'stage4Plans',
+                 overwrite_target_spacing: Union[List[float], Tuple[float, ...]] = None,
+                 suppress_transpose: bool = False):
+        super().__init__(dataset_name_or_id, gpu_memory_target_in_gb, preprocessor_name, plans_name, overwrite_target_spacing, suppress_transpose)
+        self.num_stages = 4
+
+
+class MySpecialStage5(MyDefault):
+    def __init__(self, dataset_name_or_id: Union[str, int],
+                 gpu_memory_target_in_gb: float = 8,
+                 preprocessor_name: str = 'DefaultPreprocessor', plans_name: str = 'special5Plans',
+                 overwrite_target_spacing: Union[List[float], Tuple[float, ...]] = None,
+                 suppress_transpose: bool = False):
+        super().__init__(dataset_name_or_id, gpu_memory_target_in_gb, preprocessor_name, plans_name, overwrite_target_spacing, suppress_transpose)
+        self.num_stages = 5
+        self.strides = [[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]

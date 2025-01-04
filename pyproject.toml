@@ -51,8 +51,12 @@ dependencies = [
     "imagecodecs",
     "yacs",
     "batchgeneratorsv2>=0.2",
-    "einops"
-    # medpy, openpyxl
+    "einops>=0.7.0",
+    "medpy",
+    "openpyxl",
+    "causal_conv1d",
+    "monai",
+    "mamba",
 ]
 
 [project.urls]

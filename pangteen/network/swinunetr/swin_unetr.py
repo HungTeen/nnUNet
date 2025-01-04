@@ -53,8 +53,8 @@ class SwinUNETR(nn.Module):
     def __init__(
         self,
         img_size: Sequence[int] | int,
-        in_channels: int,
-        out_channels: int,
+        input_channels: int,
+        num_classes: int,
         patch_size: int = 2,
         depths: Sequence[int] = (2, 2, 2, 2),
         num_heads: Sequence[int] = (3, 6, 12, 24),
@@ -73,6 +73,7 @@ class SwinUNETR(nn.Module):
         spatial_dims: int = 3,
         downsample: str | nn.Module = "merging",
         use_v2: bool = False,
+        **invalid_args
     ) -> None:
         """
         Args:
@@ -80,8 +81,8 @@ class SwinUNETR(nn.Module):
                 This argument is only used for checking that the input image size is divisible by the patch size.
                 The tensor passed to forward() can have a dynamic shape as long as its spatial dimensions are divisible by 2**5.
                 It will be removed in an upcoming version.
-            in_channels: dimension of input channels.
-            out_channels: dimension of output channels.
+            input_channels: dimension of input channels.
+            num_classes: dimension of output channels.
             patch_size: size of the patch token.
             feature_size: dimension of network feature size.
             depths: number of layers in each stage.
@@ -106,13 +107,13 @@ class SwinUNETR(nn.Module):
         Examples::
 
             # for 3D single channel input with size (96,96,96), 4-channel output and feature size of 48.
-            >>> net = SwinUNETR(img_size=(96,96,96), in_channels=1, out_channels=4, feature_size=48)
+            >>> net = SwinUNETR(img_size=(96,96,96), input_channels=1, num_classes=4, feature_size=48)
 
             # for 3D 4-channel input with size (128,128,128), 3-channel output and (2,4,2,2) layers in each stage.
-            >>> net = SwinUNETR(img_size=(128,128,128), in_channels=4, out_channels=3, depths=(2,4,2,2))
+            >>> net = SwinUNETR(img_size=(128,128,128), input_channels=4, num_classes=3, depths=(2,4,2,2))
 
             # for 2D single channel input with size (96,96), 2-channel output and gradient checkpointing.
-            >>> net = SwinUNETR(img_size=(96,96), in_channels=3, out_channels=2, use_checkpoint=True, spatial_dims=2)
+            >>> net = SwinUNETR(img_size=(96,96), input_channels=3, num_classes=2, use_checkpoint=True, spatial_dims=2)
 
         """
 
@@ -144,7 +145,7 @@ class SwinUNETR(nn.Module):
         self.normalize = normalize
 
         self.swinViT = SwinTransformer(
-            in_chans=in_channels,
+            in_chans=input_channels,
             embed_dim=feature_size,
             window_size=window_size,
             patch_size=patch_sizes,
@@ -165,7 +166,7 @@ class SwinUNETR(nn.Module):
 
         self.encoder1 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
-            in_channels=in_channels,
+            in_channels=input_channels,
             out_channels=feature_size,
             kernel_size=3,
             stride=1,
@@ -262,7 +263,7 @@ class SwinUNETR(nn.Module):
             res_block=True,
         )
 
-        self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
+        self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=num_classes)
 
     def load_from(self, weights):
         with torch.no_grad():
