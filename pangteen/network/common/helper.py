@@ -170,6 +170,9 @@ def get_matching_dropout(conv_op: Type[_ConvNd] = None, dimension: int = None) -
     assert not ((conv_op is not None) and (dimension is not None)), \
         "You MUST set EITHER conv_op OR dimension. Do not set both!"
     assert dimension in [1, 2, 3], 'Dimension must be 1, 2 or 3'
+    '''
+    PangTeen: 这是人写出来的逻辑？不要conv_op 直说好吗？
+    '''
     if dimension == 1:
         return nn.Dropout
     elif dimension == 2:
@@ -240,3 +243,48 @@ def get_default_network_config(dimension: int = 2,
         raise NotImplementedError('Unknown nonlin %s. Only "LeakyReLU" and "ReLU" are supported for now' % nonlin)
 
     return config
+
+
+def channel_to_the_last(t):
+    """
+    调整张量的维度排列，适配二维 (B, C, H, W) 和三维 (B, C, H, W, D) 数据。
+    对二维数据，变换为 (B, H, W, C)。
+    对三维数据，变换为 (B, H, W, D, C)。
+
+    Args:
+        t (torch.Tensor): 输入张量，形状为 (B, C, H, W) 或 (B, C, H, W, D)。
+
+    Returns:
+        torch.Tensor: 调整维度后的张量。
+    """
+    if t.ndimension() == 4:  # 二维数据: B, C, H, W
+        t = t.permute(0, 2, 3, 1).contiguous()  # 变换为 B, H, W, C
+    elif t.ndimension() == 5:  # 三维数据: B, C, H, W, D
+        t = t.permute(0, 2, 3, 4, 1).contiguous()  # 变换为 B, H, W, D, C
+    else:
+        raise ValueError(f"Unsupported tensor dimension: {t.ndimension()}D. Expected 4D or 5D tensor.")
+
+    return t
+
+
+def channel_to_the_second(t):
+    """
+    恢复张量的维度顺序，适配二维和三维数据。
+    从 (B, H, W, C) 恢复为 (B, C, H, W)。
+    从 (B, H, W, D, C) 恢复为 (B, C, H, W, D)。
+
+    Args:
+        t (torch.Tensor): 输入张量，形状为 (B, H, W, C) 或 (B, H, W, D, C)。
+
+    Returns:
+        torch.Tensor: 恢复维度后的张量。
+    """
+    if t.ndimension() == 4:  # 二维数据: B, H, W, C
+        t = t.permute(0, 3, 1, 2).contiguous()  # 变换回 B, C, H, W
+    elif t.ndimension() == 5:  # 三维数据: B, H, W, D, C
+        t = t.permute(0, 4, 1, 2, 3).contiguous()  # 变换回 B, C, H, W, D
+    else:
+        raise ValueError(f"Unsupported tensor dimension: {t.ndimension()}D. Expected 4D or 5D tensor.")
+
+    return t
+

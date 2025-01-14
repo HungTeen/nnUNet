@@ -5,7 +5,7 @@ from typing import Union, List, Tuple, Type
 
 from torch.nn.modules.dropout import _DropoutNd
 
-from pangteen.network.helper import get_matching_convtransp
+from pangteen.network.common.helper import get_matching_convtransp
 from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
 
 from pangteen.network.unet.block import StackedConvBlocks

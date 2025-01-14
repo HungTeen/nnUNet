@@ -5,7 +5,7 @@ from typing import Union, Type, List, Tuple
 
 from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
-from pangteen.network.helper import maybe_convert_scalar_to_list, get_matching_pool_op
+from pangteen.network.common.helper import maybe_convert_scalar_to_list, get_matching_pool_op
 from pangteen.network.unet.block import StackedConvBlocks
 
 

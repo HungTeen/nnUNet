@@ -2,6 +2,7 @@ from os.path import join
 
 max_cpu_cnt = 6
 ablation_patch_size = (64, 128, 128)
+drop_out_rate = 0.1
 
 # 标注相关。
 area_label = 1
@@ -25,5 +26,9 @@ my_base_folder = join(my_folder, my_task_name)  # 项目数据的根路径。
 my_image_folder = join(my_base_folder, 'image')
 my_label_folder = join(my_base_folder, 'label')
 my_split_folder = join(my_base_folder, 'test_split')
+
+kits_task_name = "KiTS"
+kits_base_folder = join(my_folder, kits_task_name)  # 项目数据的根路径。
+kits_dataset_folder = join(kits_base_folder, 'dataset')  # 存放原始数据。
 
 predict_folder = join(my_folder, 'predict')  # 存放模型预测结果。

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from torch import nn
 
-from kan import KANLinear
+from pangteen.network.common.kan import KANLinear
 
 
 # from mmcv.cnn import ConvModule

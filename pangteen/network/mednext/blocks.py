@@ -3,10 +3,9 @@ from typing import Type
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Conv3d
 from torch.nn.modules.conv import _ConvNd
 
-from pangteen.network.helper import get_matching_convtransp
+from pangteen.network.common.helper import get_matching_convtransp
 
 
 class MedNeXtBlock(nn.Module):

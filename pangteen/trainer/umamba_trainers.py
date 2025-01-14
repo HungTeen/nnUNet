@@ -1,15 +1,11 @@
 from typing import Union, List, Tuple
 
 import torch
-
-from nnunetv2.training.loss.dice import get_tp_fp_fn_tn
-from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
-from nnunetv2.utilities.plans_handling.plans_handler import ConfigurationManager, PlansManager
 from torch import nn
 
 from pangteen import config
-from pangteen.network.umamba.umamba_bot import get_umamba_bot_3d_from_plans, UMambaBot
-from pangteen.network.umamba.umamba_enc import get_umamba_enc_3d_from_plans, UMambaEnc
+from pangteen.network.umamba.umamba_bot import UMambaBot
+from pangteen.network.umamba.umamba_enc import UMambaEnc
 from pangteen.network.unet.unet import InitWeights_He
 from pangteen.trainer.trainers import HTTrainer
 
@@ -45,7 +41,7 @@ class UMambaBotTrainer(HTTrainer):
         return network
 
 
-class UMambaEncTrainer(nnUNetTrainer):
+class UMambaEncTrainer(HTTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):

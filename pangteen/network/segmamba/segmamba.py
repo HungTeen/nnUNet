@@ -10,14 +10,13 @@
 # limitations under the License.
 
 from __future__ import annotations
-import torch.nn as nn
-import torch
-from functools import partial
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from mamba_ssm import Mamba
 from monai.networks.blocks.dynunet_block import UnetOutBlock
 from monai.networks.blocks.unetr_block import UnetrBasicBlock, UnetrUpBlock
-import torch.nn.functional as F
 
 
 class LayerNorm(nn.Module):
@@ -199,6 +198,10 @@ class MambaEncoder(nn.Module):
 
 
 class SegMamba(nn.Module):
+    """
+    Reference: https://github.com/ge-xing/SegMamba
+    """
+
     def __init__(
             self,
             input_channels=1,

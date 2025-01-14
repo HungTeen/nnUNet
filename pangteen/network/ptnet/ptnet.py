@@ -21,7 +21,7 @@ class InitWeights_He(object):
                 module.bias = nn.init.constant_(module.bias, 0)
 
 
-class PlainConvUNet(nn.Module):
+class PangTeenUNet(nn.Module):
     def __init__(self,
                  input_channels: int,
                  n_stages: int,
@@ -40,7 +40,8 @@ class PlainConvUNet(nn.Module):
                  nonlin: Union[None, Type[torch.nn.Module]] = None,
                  nonlin_kwargs: dict = None,
                  deep_supervision: bool = False,
-                 nonlin_first: bool = False
+                 nonlin_first: bool = False,
+                 **invalid_args
                  ):
         """
         nonlin_first: if True you get conv -> nonlin -> norm. Else it's conv -> norm -> nonlin
@@ -80,7 +81,7 @@ class PlainConvUNet(nn.Module):
 
 
 if __name__ == "__main__":
-    network = PlainConvUNet(
+    network = PangTeenUNet(
         input_channels=1,
         n_stages=6,
         features_per_stage= [32, 64, 128, 256, 320, 320],

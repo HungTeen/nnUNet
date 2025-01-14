@@ -11,6 +11,9 @@ from pangteen.trainer.trainers import HTTrainer
 
 
 class SwinUNETRTrainer(HTTrainer):
+    """
+    CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 201 3d_fullres 3 -p default -tr SwinUNETRTrainer -num_gpus 1 > main.out 2>&1 &
+    """
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
@@ -43,11 +46,14 @@ class SwinUNETRTrainer(HTTrainer):
 
 
 class SwinUNETRV2Trainer(HTTrainer):
+    """
+    CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 201 3d_fullres 3 -p default -tr SwinUNETRV2Trainer -num_gpus 1 > main.out 2>&1 &
+    """
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 500
+        self.num_epochs = 1000
         self.initial_lr = 1e-3
         self.enable_deep_supervision = False
 

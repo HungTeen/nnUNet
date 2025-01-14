@@ -4,7 +4,7 @@ import numpy as np
 
 from nnunetv2.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
 from pangteen import config
-from pangteen.network.helper import get_matching_instancenorm, convert_dim_to_conv_op
+from pangteen.network.common.helper import get_matching_instancenorm, convert_dim_to_conv_op
 
 
 class MyDefault(ExperimentPlanner):

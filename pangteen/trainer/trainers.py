@@ -1,11 +1,12 @@
-import pydoc
 from typing import Union, List, Tuple
 
 import torch
+from dynamic_network_architectures.architectures.unet import PlainConvUNet
 from torch import nn
 
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
-from pangteen.network.unet.unet import PlainConvUNet
+from pangteen import config
+from pangteen.network.common.helper import get_matching_dropout
 
 
 class HTTrainer(nnUNetTrainer):
@@ -13,7 +14,7 @@ class HTTrainer(nnUNetTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 500
+        self.num_epochs = 1000
 
     @staticmethod
     def update_network_args(arch_init_kwargs: dict,
@@ -26,10 +27,11 @@ class HTTrainer(nnUNetTrainer):
         """
         构建模型的通用部分。
         """
+        from pydoc import locate
         architecture_kwargs = dict(**arch_init_kwargs)
         for ri in arch_init_kwargs_req_import:
             if architecture_kwargs[ri] is not None:
-                architecture_kwargs[ri] = pydoc.locate(architecture_kwargs[ri])
+                architecture_kwargs[ri] = locate(architecture_kwargs[ri])
 
         if enable_deep_supervision is not None:
             architecture_kwargs['deep_supervision'] = enable_deep_supervision
@@ -41,11 +43,14 @@ class HTTrainer(nnUNetTrainer):
             for i in invalid_args:
                 architecture_kwargs.pop(i)
 
+        if config.drop_out_rate:
+            architecture_kwargs['dropout_op'] = get_matching_dropout(dimension=3)
+            architecture_kwargs['dropout_op_kwargs'] = {'p': config.drop_out_rate}
+
         if print_args:
             print("Look ! It's architecture args : {}", architecture_kwargs)
 
         return architecture_kwargs
-
 
 
     @staticmethod
