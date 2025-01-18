@@ -95,6 +95,16 @@ def get_matching_pool_op(conv_op: Type[_ConvNd] = None,
                 return nn.MaxPool3d
 
 
+def get_matching_interpolate(dimension: int = None) -> str:
+    """
+    :param dimension:
+    """
+    if dimension == 2:
+        return 'bilinear'
+    elif dimension == 3:
+        return 'trilinear'
+    raise ValueError("Only 2d and 3d supported")
+
 def get_matching_instancenorm(conv_op: Type[_ConvNd] = None, dimension: int = None) -> Type[_InstanceNorm]:
     """
     You MUST set EITHER conv_op OR dimension. Do not set both!

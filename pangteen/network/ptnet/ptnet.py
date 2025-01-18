@@ -4,7 +4,7 @@ from torch.nn.modules.dropout import _DropoutNd
 from pangteen.network.common.helper import *
 import torch
 from torch import nn
-from typing import Union, Type, List, Tuple
+from typing import Union, Type, List, Tuple, Optional
 
 from pangteen.network.unet.unet_decoder import UNetDecoder
 from pangteen.network.unet.unet_encoder import PlainConvEncoder
@@ -21,53 +21,73 @@ class InitWeights_He(object):
                 module.bias = nn.init.constant_(module.bias, 0)
 
 
-class PangTeenUNet(nn.Module):
+class PangTeenNet(nn.Module):
     def __init__(self,
-                 input_channels: int,
                  n_stages: int,
-                 features_per_stage: Union[int, List[int], Tuple[int, ...]],
-                 conv_op: Type[_ConvNd],
-                 kernel_sizes: Union[int, List[int], Tuple[int, ...]],
-                 strides: Union[int, List[int], Tuple[int, ...]],
-                 n_conv_per_stage: Union[int, List[int], Tuple[int, ...]],
-                 num_classes: int,
-                 n_conv_per_stage_decoder: Union[int, Tuple[int, ...], List[int]],
-                 conv_bias: bool = False,
-                 norm_op: Union[None, Type[nn.Module]] = None,
-                 norm_op_kwargs: dict = None,
-                 dropout_op: Union[None, Type[_DropoutNd]] = None,
-                 dropout_op_kwargs: dict = None,
-                 nonlin: Union[None, Type[torch.nn.Module]] = None,
-                 nonlin_kwargs: dict = None,
+                 enable_skip_layer: bool = True,
+                 skip_merge_type: str = 'concat',
                  deep_supervision: bool = False,
-                 nonlin_first: bool = False,
                  **invalid_args
                  ):
         """
-        nonlin_first: if True you get conv -> nonlin -> norm. Else it's conv -> norm -> nonlin
+        Args:
+            enable_skip: 如果是True，那么网络会有skip connection。
+            skip_merge_type: 可以是'concat'或者'add'。如果是'concat'，那么skip connection会被concatenate到decoder的输出上。
+            deep_supervision: 如果是True，那么返回的是一个list，里面包含了每个stage的输出。
         """
         super().__init__()
-        if isinstance(n_conv_per_stage, int):
-            n_conv_per_stage = [n_conv_per_stage] * n_stages
-        if isinstance(n_conv_per_stage_decoder, int):
-            n_conv_per_stage_decoder = [n_conv_per_stage_decoder] * (n_stages - 1)
-        assert len(n_conv_per_stage) == n_stages, "n_conv_per_stage must have as many entries as we have " \
-                                                  f"resolution stages. here: {n_stages}. " \
-                                                  f"n_conv_per_stage: {n_conv_per_stage}"
-        assert len(n_conv_per_stage_decoder) == (n_stages - 1), "n_conv_per_stage_decoder must have one less entries " \
-                                                                f"as we have resolution stages. here: {n_stages} " \
-                                                                f"stages, so it should have {n_stages - 1} entries. " \
-                                                                f"n_conv_per_stage_decoder: {n_conv_per_stage_decoder}"
-        self.encoder = PlainConvEncoder(input_channels, n_stages, features_per_stage, conv_op, kernel_sizes, strides,
-                                        n_conv_per_stage, conv_bias, norm_op, norm_op_kwargs, dropout_op,
-                                        dropout_op_kwargs, nonlin, nonlin_kwargs, return_skips=True,
-                                        nonlin_first=nonlin_first)
-        self.decoder = UNetDecoder(self.encoder, num_classes, n_conv_per_stage_decoder, deep_supervision,
-                                   nonlin_first=nonlin_first)
+        self.n_stages = n_stages
+        self.enable_skip_layer = enable_skip_layer
+        self.skip_merge_type = skip_merge_type
+        self.deep_supervision = deep_supervision
+
+        self.encoder_layers = nn.ModuleList()
+        self.down_sample_blocks = nn.ModuleList()  # 降采样，改变空间大小。
+        self.skip_layers = nn.ModuleList()  # 跳跃连接层的处理。
+        self.bottle_neck: Optional[nn.Module] = None  # 瓶颈层，中间层。
+        self.up_sample_blocks = nn.ModuleList()  # 上采样，还原空间大小。
+        self.decoder_layers = nn.ModuleList()
+        self.seg_layers = nn.ModuleList()  # 输出分割结果。
+
 
     def forward(self, x):
-        skips = self.encoder(x)
-        return self.decoder(skips)
+        skips = []
+        for i, encoder_layer in enumerate(self.encoder_layers):
+            x = encoder_layer(x)
+            x = self.down_sample_blocks[i](x)
+            t = x
+            if self.enable_skip_layer and len(self.skip_layers) > i and self.skip_layers[i] is not None:
+                t = self.skip_layers[i](t)
+            skips.append(t)
+
+        x = self.bottle_neck(x)
+        # for i, skip in enumerate(skips):
+        #     print("skip {}: {}".format(i, skip.size()))
+
+        seg_outputs = []
+        for i in range(1, self.n_stages):
+            x = self.up_sample_blocks[-i](x)
+
+            if self.enable_skip_layer:
+                if self.skip_merge_type == 'concat':
+                    x = torch.cat([x, skips[- i]], dim=1)
+                elif self.skip_merge_type == 'add':
+                    x = x + skips[- i]
+                else:
+                    raise ValueError("skip_merge_type should be 'concat' or 'add'")
+
+            x = self.decoder_layers[-i](x)
+            if self.deep_supervision:
+                seg_outputs.append(self.seg_layers[- i](x))
+
+        if not self.deep_supervision:
+            seg_outputs.append(self.seg_layers[-1](x))
+
+        seg_outputs = seg_outputs[::-1]
+        if self.deep_supervision:
+            return seg_outputs
+        else:
+            return seg_outputs[-1]
 
     def compute_conv_feature_map_size(self, input_size):
         assert len(input_size) == convert_conv_op_to_dim(self.encoder.conv_op), "just give the image size without color/feature channels or " \
@@ -79,31 +99,3 @@ class PangTeenUNet(nn.Module):
     def initialize(module):
         InitWeights_He(1e-2)(module)
 
-
-if __name__ == "__main__":
-    network = PangTeenUNet(
-        input_channels=1,
-        n_stages=6,
-        features_per_stage= [32, 64, 128, 256, 320, 320],
-        conv_op= nn.Conv3d,
-        kernel_sizes = [[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
-        strides = [[1, 1, 1], [1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
-        n_conv_per_stage=[2, 2, 2, 2, 2, 2],
-        num_classes=2,
-        n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
-        conv_bias= True,
-        deep_supervision=True
-    ).cuda()
-
-    x = torch.zeros((2, 1, 20, 320, 256), requires_grad=False).cuda()
-
-    with torch.autocast(device_type='cuda', enabled=True):
-        print(x.device)
-        pred = network(x)
-        for y in pred:
-            print(y.size())
-
-    def count_parameters(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-    print(count_parameters(network))

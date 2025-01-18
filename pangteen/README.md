@@ -8,6 +8,7 @@ python -u pangteen/dataset/Dataset100_Ablation.py contrast label -d 102
 ```bash
 nnUNetv2_plan_and_preprocess -d 101 -c 3d_fullres --verify_dataset_integrity
 nnUNetv2_plan_and_preprocess -d 101 -c 3d_fullres -pl Stage5 --verify_dataset_integrity
+nnUNetv2_plan_and_preprocess -d 201 -c 2d --verify_dataset_integrity
 nnUNetv2_plan_and_preprocess -d 201 -c 3d_fullres -pl MyDefault --verify_dataset_integrity
 ```
 

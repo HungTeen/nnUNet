@@ -7,6 +7,10 @@ from torch import nn
 from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
 
+from pangteen.network.common.helper import get_matching_pool_op, get_matching_convtransp
+from pangteen.network.unet.block import StackedConvBlocks
+
+
 class BasicConvBlock(nn.Module):
     """
     通用的基础卷积块，包含卷积、规范化、dropout和非线性激活函数。
@@ -80,79 +84,98 @@ class BasicConvBlock(nn.Module):
         output_size = [i // j for i, j in zip(input_size, self.stride)]  # we always do same padding
         return np.prod([self.output_channels, *output_size], dtype=np.int64)
 
-
-class ChannelAttentionBlock(nn.Module):
+class MultiBasicConvBlock(nn.Module):
     """
-    MedNeXt中的通道注意力块。
+    多个基础卷积块，包含卷积、规范化、dropout和非线性激活函数。
     """
 
     def __init__(self,
-                 in_channels: int,
-                 out_channels: int,
+                 num_convs: int,
+                 input_channels: int,
+                 output_channels: int,
                  conv_op: Type[_ConvNd],
-                 do_res: int = True,
-                 exp_r: int = 4,
-                 kernel_size: int = 7,
-                 n_groups: int or None = None,
+                 kernel_size: Union[int, List[int], Tuple[int, ...]],
+                 stride: Union[int, List[int], Tuple[int, ...]],
+                 conv_group: int = 1,
+                 conv_bias: bool = False,
                  norm_op: Union[None, Type[nn.Module]] = None,
                  norm_op_kwargs: dict = None,
-                 grn=False
+                 dropout_op: Union[None, Type[_DropoutNd]] = None,
+                 dropout_op_kwargs: dict = None,
+                 nonlin: Union[None, Type[torch.nn.Module]] = None,
+                 nonlin_kwargs: dict = None,
+                 nonlin_first: bool = False
                  ):
-
-        super().__init__()
-
-        self.do_res = do_res
-
-        # DepthWise Convolution & Normalization
-        self.conv1 = BasicConvBlock(
-            in_channels,
-            in_channels,
-            conv_op=conv_op,
-            kernel_size=kernel_size,
-            stride=1,
-            conv_group=in_channels if n_groups is None else n_groups,
-            norm_op=norm_op, norm_op_kwargs=norm_op_kwargs
-        )
-
-        # Expansion Convolution with Conv3D 1x1x1
-        self.expand_conv = BasicConvBlock(
-            in_channels,
-            exp_r * in_channels,
-            conv_op=conv_op,
-            kernel_size=1,
-            stride=1,
-            nonlin=nn.GELU
-        )
-
-        # Compression Convolution with Conv3D 1x1x1
-        self.compress_conv = BasicConvBlock(
-            exp_r * in_channels,
-            out_channels,
-            conv_op=conv_op,
-            kernel_size=1,
-            stride=1,
-        )
-
-        self.grn = grn
-        if grn:
-            self.grn_beta = nn.Parameter(torch.zeros(1, exp_r * in_channels, 1, 1, 1), requires_grad=True)
-            self.grn_gamma = nn.Parameter(torch.zeros(1, exp_r * in_channels, 1, 1, 1), requires_grad=True)
-
+        super(MultiBasicConvBlock, self).__init__()
+        self.num_convs = num_convs
+        if num_convs > 0:
+            self.convs = nn.Sequential(
+                BasicConvBlock(
+                    input_channels, output_channels,
+                    conv_op, kernel_size, stride, conv_group, conv_bias, norm_op,
+                    norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
+                ),
+                *[
+                    BasicConvBlock(
+                        output_channels, output_channels, conv_op, kernel_size, 1, conv_group, conv_bias, norm_op,
+                        norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
+                    )
+                    for i in range(1, num_convs)
+                ]
+            )
 
     def forward(self, x):
-        x1 = x
-        x1 = self.conv1(x1)
-        x1 = self.expand_conv(x1)
-        if self.grn:
-            # gamma, beta: learnable affine transform parameters
-            # X: input of shape (N,C,H,W,D)
-            gx = torch.norm(x1, p=2, dim=(-3, -2, -1), keepdim=True)
-            nx = gx / (gx.mean(dim=1, keepdim=True) + 1e-6)
-            x1 = self.grn_gamma * (x1 * nx) + self.grn_beta + x1
-        x1 = self.compress_conv(x1)
-        if self.do_res:
-            x1 = x + x1
-        return x1
+        return self.convs(x) if self.num_convs > 0 else x
+
+class DownSampleBlock(nn.Module):
+    """
+    下采样块，包含卷积、规范化、dropout和非线性激活函数。
+    """
+
+    def __init__(self, conv_op: Type[_ConvNd],
+                 input_channels: int, out_channels: Union[int, List[int], Tuple[int, ...]],
+                 kernel_size: Union[int, List[int], Tuple[int, ...]], stride: Union[int, List[int], Tuple[int, ...]],
+                 conv_bias: bool = False, norm_op: Union[None, Type[nn.Module]] = None, norm_op_kwargs: dict = None,
+                 dropout_op: Union[None, Type[_DropoutNd]] = None, dropout_op_kwargs: dict = None,
+                 nonlin: Union[None, Type[torch.nn.Module]] = None, nonlin_kwargs: dict = None,
+                 pool: str = 'conv'):
+        super().__init__()
+        stage_modules = []
+        if pool == 'max' or pool == 'avg':
+            stage_modules.append(get_matching_pool_op(conv_op, pool_type=pool)(kernel_size=stride, stride=stride))
+            conv_stride = 1
+        elif pool == 'conv':
+            conv_stride = stride
+        else:
+            raise RuntimeError()
+        stage_modules.append(BasicConvBlock(
+            input_channels, out_channels, conv_op, kernel_size, conv_stride, 1,
+            conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
+        ))
+        self.encoder = nn.Sequential(*stage_modules)
+
+    def forward(self, x):
+        return self.encoder(x)
+
+
+class UpSampleBlock(nn.Module):
+    """
+    下采样块。
+    """
+
+    def __init__(self, conv_op: Type[_ConvNd],
+                 input_channels: int, out_channels: Union[int, List[int], Tuple[int, ...]],
+                 stride: Union[int, List[int], Tuple[int, ...]],
+                 conv_bias: bool = False):
+        super().__init__()
+        trans_conv_op = get_matching_convtransp(conv_op)
+        self.up_sample = trans_conv_op(
+                input_channels, out_channels, stride, stride,
+                bias=conv_bias
+            )
+
+    def forward(self, x):
+        return self.up_sample(x)
 
 
 class GSC(nn.Module):
@@ -189,7 +212,6 @@ class GSC(nn.Module):
                                     conv_bias=conv_bias, norm_op=norm_op,
                                     dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs, nonlin=nonlin,
                                     nonlin_first=nonlin_first)
-
 
 
     def forward(self, x):
