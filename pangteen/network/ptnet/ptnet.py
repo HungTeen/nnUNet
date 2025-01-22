@@ -81,7 +81,7 @@ class PangTeenNet(nn.Module):
                 seg_outputs.append(self.seg_layers[- i](x))
 
         if not self.deep_supervision:
-            seg_outputs.append(self.seg_layers[-1](x))
+            seg_outputs.append(self.seg_layers[0](x))
 
         seg_outputs = seg_outputs[::-1]
         if self.deep_supervision:

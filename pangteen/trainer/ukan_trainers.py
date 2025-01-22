@@ -3,9 +3,9 @@ from typing import Union, List, Tuple
 import torch
 from torch import nn
 
+from pangteen.network.ptnet.ptukan import UKAN_3D
 from pangteen.network.ukan.ukan_2d import UKAN
 from pangteen.trainer.trainers import HTTrainer
-from pangteen.network.ptnet.ukan import UKAN_3D
 
 
 class UKanTrainer(HTTrainer):

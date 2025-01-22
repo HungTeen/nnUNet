@@ -2,7 +2,7 @@ from os.path import join
 
 max_cpu_cnt = 6
 ablation_patch_size = (64, 128, 128)
-drop_out_rate = 0.1
+drop_out_rate = None # 0.1
 
 # 标注相关。
 area_label = 1

@@ -104,25 +104,42 @@ class MultiBasicConvBlock(nn.Module):
                  dropout_op_kwargs: dict = None,
                  nonlin: Union[None, Type[torch.nn.Module]] = None,
                  nonlin_kwargs: dict = None,
-                 nonlin_first: bool = False
+                 nonlin_first: bool = False,
+                 reverse_order: bool = False
                  ):
         super(MultiBasicConvBlock, self).__init__()
         self.num_convs = num_convs
         if num_convs > 0:
-            self.convs = nn.Sequential(
-                BasicConvBlock(
-                    input_channels, output_channels,
-                    conv_op, kernel_size, stride, conv_group, conv_bias, norm_op,
-                    norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
-                ),
-                *[
+            if not reverse_order:
+                self.convs = nn.Sequential(
                     BasicConvBlock(
-                        output_channels, output_channels, conv_op, kernel_size, 1, conv_group, conv_bias, norm_op,
+                        input_channels, output_channels,
+                        conv_op, kernel_size, stride, conv_group, conv_bias, norm_op,
                         norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
-                    )
-                    for i in range(1, num_convs)
-                ]
-            )
+                    ),
+                    *[
+                        BasicConvBlock(
+                            output_channels, output_channels, conv_op, kernel_size, 1, conv_group, conv_bias, norm_op,
+                            norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
+                        )
+                        for i in range(1, num_convs)
+                    ]
+                )
+            else:
+                self.convs = nn.Sequential(
+                    *[
+                        BasicConvBlock(
+                            input_channels, input_channels, conv_op, kernel_size, 1, conv_group, conv_bias, norm_op,
+                            norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
+                        )
+                        for i in range(1, num_convs)
+                    ],
+                    BasicConvBlock(
+                        input_channels, output_channels,
+                        conv_op, kernel_size, stride, conv_group, conv_bias, norm_op,
+                        norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
+                    ),
+                )
 
     def forward(self, x):
         return self.convs(x) if self.num_convs > 0 else x

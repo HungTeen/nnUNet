@@ -111,8 +111,8 @@ class RepBlock(nn.Module):
         inputs = self.conv(inputs)
         inputs = self.act(inputs)
 
-        channel_att_vec = self.ca(inputs)
-        inputs = channel_att_vec * inputs
+        channel_att_vec = self.ca(inputs)  # B C 1 1
+        inputs = channel_att_vec * inputs  # B C X Y
 
         x_init = self.dconv5_5(inputs)
         x_1 = self.dconv1_7(x_init)
@@ -589,6 +589,13 @@ class Block_up(nn.Module):
 class CPCANet(nn.Module):
     """
     Reference: https://github.com/Cuthbert-Huang/CPCANet
+    Architecture: CPCANet
+      encoder:
+        - PatchEmbed：将输入图像按patch分块切分。
+        - BasicLayer：包含若干个Block。
+          - Block：包含一个depthwise conv、一个BN、一个LayerNorm、一个DropPath、一个FFNBlock2、一个RepBlock。
+            - RepBlock：包含一个ChannelAttention、
+
     """
 
     def __init__(self,

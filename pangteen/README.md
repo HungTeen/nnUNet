@@ -38,5 +38,5 @@ python -u pangteen/time_analyze.py main2.out
 
 批量删除线程：
 ```bash
-ps -def|grep nnUNetv2_train|cut -c 9-15|xargs kill -9
+ps -def|grep pangteen|cut -c 9-15|xargs kill -9
 ```
