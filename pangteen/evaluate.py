@@ -11,16 +11,12 @@ from nnunetv2.utilities.file_path_utilities import get_specific_folder
 from pangteen import config, utils
 from pangteen.util import metrics as m
 
-LABELS = {
-    "消融区域": config.area_label,
-}
-
 COMMON_METRICS = {
     # "False Positive Rate": m.false_positive_rate,
     "Dice": m.dice,  # 重叠率，越大越好。
     "IOU": m.jaccard,  # 交并比，另一种重叠率，越大越好（IOU）。
-    "HD": m.hausdorff_distance,  # 豪斯多夫距离，越小越好。Dice对mask的内部填充比较敏感，而hausdorff distance 对分割出的边界比较敏感。
-    "HD95": m.hausdorff_distance_95,  # 豪斯多夫距离去掉最大的一些值，越小越好。
+    # "HD": m.hausdorff_distance,  # 豪斯多夫距离，越小越好。Dice对mask的内部填充比较敏感，而hausdorff distance 对分割出的边界比较敏感。
+    # "HD95": m.hausdorff_distance_95,  # 豪斯多夫距离去掉最大的一些值，越小越好。
     "Precision": m.precision,  # 精确率，越大越好。
     "Recall": m.recall,  # 查全率，越大越好。
     # "ASSD": m.avg_surface_distance_symmetric,  # 双边平均距离，越小越好。
@@ -49,11 +45,6 @@ METRIC_DIRECTIONS = {
     "Precision": True,
     "Recall": True,
     "ASSD": False,
-    'KASCR': True,  # 肾动脉正确分割率。
-    'KASCC_95': True,  # 肾动脉分割正确个数。
-    'KASCC_90': True,  # 肾动脉分割正确个数。
-    'KASCC_85': True,  # 肾动脉分割正确个数。
-    'KASCC_80': True,  # 肾动脉分割正确个数。
 }
 
 
@@ -67,11 +58,18 @@ def get_worst_val(name):
 
 class MetricManager:
 
-    def __init__(self, result_folder, label_folder):
+    def __init__(self, result_folder, task_config: config.BaseConfig):
         """
         Args:
+            result_folder: 预测结果文件夹。
+            task_config: 任务配置。
         """
-        self.summary_row_titles = list(LABELS.keys()) + ["平均", "最佳", "最差", "75分位", "25分位"]
+        self.labels = list(task_config.label_map.values())[1:]  # 除了背景外的标签。
+        self.task_config = task_config
+        self.label_map = {}
+        for k, v in task_config.label_map.items():
+            self.label_map[v] = k  # 标签名字 -> 标签值。
+        self.summary_row_titles = self.labels + ["平均", "最佳", "最差", "75分位", "25分位"]
         self.summary_col_titles = list(COMMON_METRICS.keys())
 
         self.summary_table_data = np.zeros((len(self.summary_row_titles), len(self.summary_col_titles)))
@@ -79,7 +77,7 @@ class MetricManager:
         self.detail_table_data = {}  # 评价指标 -> 数据 -> 五个段的评估结果。
         self.test_data_name = []  # 测试集名字。
         self.predict_result_folder = result_folder
-        self.label_folder = label_folder
+
 
     def evaluate(self):
         """
@@ -114,7 +112,7 @@ class MetricManager:
         results: [filename, metric] 第一维是测试数据名，第二维是对应指标平均评估结果。
         """
         results = np.array(self.average_data)
-        size = len(LABELS.keys())
+        size = len(self.labels)
         for i, metric in enumerate(self.summary_col_titles):
             increasing = METRIC_DIRECTIONS.get(metric)
 
@@ -143,19 +141,22 @@ class MetricManager:
             detail_data = self.detail_table_data.get(name)
             print(len(detail_data), len(detail_data[0]))
             print(len(self.test_data_name))
-            cols = ['消融区域体素数/总体素数', ] + list(LABELS.keys())
+            cols = ['消融区域体素数/总体素数', ] + list(self.labels)
             metric_table = pd.DataFrame(data=detail_data, index=self.test_data_name, columns=cols)
             metric_table.to_excel(table_writer, sheet_name=name)
 
         table_writer.close()
+
+    def get_label_path(self, image_filename):
+        return self.task_config.get_label_path(image_filename)
 
 
 class ImageInfo:
     def __init__(self, manager: MetricManager, filename):
         start_time = time()
         self.filename = filename
-        self.predict_image, self.predict, _ = utils.read_image(manager.predict_result_folder, filename)
-        self.gt_image, self.gt, _ = utils.read_image(manager.label_folder, self.filename)
+        self.predict_image, self.predict, spacing1 = utils.read_image(manager.predict_result_folder, filename)
+        self.gt_image, self.gt, spacing2 = utils.read_image(manager.get_label_path(filename))
         self.confusion_matrix = m.ConfusionMatrix()
         print("cost {} seconds on initialize image".format(time() - start_time))
 
@@ -165,7 +166,10 @@ class ImageInfo:
             start_time = time()
             tmp_val = []
             res = 0
-            for i, label in enumerate(LABELS.values()):
+            for i, label_name in enumerate(manager.labels):
+                label = manager.label_map[label_name]
+                # 把label变成np.uint8类型，否则会出现错误。
+                label = np.uint8(label)
                 self.confusion_matrix.set_test(self.predict == label)
                 self.confusion_matrix.set_reference(self.gt == label)
                 metric_val = metric(confusion_matrix=self.confusion_matrix, nan_for_nonexisting=True)
@@ -178,8 +182,8 @@ class ImageInfo:
                 tmp_val.append(round(metric_val, 2))
                 manager.summary_table_data[i, j] += metric_val
 
-            metric_results.append(res / len(LABELS))
-            row_data = ['{}/{}'.format(np.sum(self.gt == config.area_label), self.gt.shape[0] * self.gt.shape[1] * self.gt.shape[2]), ] + tmp_val
+            metric_results.append(res / len(manager.labels))
+            row_data = ['{}/{}'.format(np.sum(self.gt != 0), self.gt.shape[0] * self.gt.shape[1] * self.gt.shape[2]), ] + tmp_val
             manager.detail_table_data.setdefault(name, []).append(row_data)
             print("cost {} seconds on calculating {} : {}".format(time() - start_time, name, tmp_val))
 
@@ -189,7 +193,6 @@ class ImageInfo:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Use this to evaluate the test data.')
-    parser.add_argument('gt_folder', type=str, help="The ground truth folder to evaluate")
     parser.add_argument('-i', type=str, required=False, help="The predict result folder to evaluate")
     parser.add_argument('-d', type=str, required=True,
                         help='Dataset with which you would like to predict. You can specify either dataset name or id')
@@ -204,6 +207,8 @@ def main():
     parser.add_argument('-f', nargs='+', type=str, required=False, default=(0, 1, 2, 3, 4),
                         help='Specify the folds of the trained model that should be used for prediction. '
                              'Default: (0, 1, 2, 3, 4)')
+    parser.add_argument('-t', type=str, required=False,
+                        help='The test data name to evaluate, default is default config.')
     args = parser.parse_args()
 
     folds = [i if i == 'all' else int(i) for i in args.f]
@@ -212,8 +217,9 @@ def main():
     else:
         result_folder = args.i
 
-    gt_folder = os.path.join(config.my_folder, args.gt_folder)
-    manager = MetricManager(result_folder=result_folder, label_folder=gt_folder)
+    task_config = utils.get_task_config(args.t)
+
+    manager = MetricManager(result_folder=result_folder, task_config=task_config)
     manager.evaluate()
 
 

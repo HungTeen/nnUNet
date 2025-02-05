@@ -1,10 +1,22 @@
 import os.path
-from typing import Optional, Tuple, Any, Union
+from typing import Any
 
+import SimpleITK as silk
 import numpy as np
 from SimpleITK import Image
 from numpy import ndarray, dtype
-import SimpleITK as silk
+
+from pangteen import config
+from pangteen.config import BaseConfig
+
+
+def get_task_config(task_name=None) -> BaseConfig:
+    if task_name is not None:
+        for c in config.config_list:
+            if c.task_name == task_name:
+                return c
+
+    return config.main_config
 
 def next_file(folder, sort=True, return_path=False):
     """

@@ -16,7 +16,7 @@ class MyDefault(ExperimentPlanner):
         super().__init__(dataset_name_or_id, gpu_memory_target_in_gb, preprocessor_name, plans_name,
                          overwrite_target_spacing, suppress_transpose)
         self.batch_size = 2
-        self.patch_size = config.ablation_patch_size
+        self.patch_size = config.patch_size
         self.num_stages = 6
         self.features_per_stage = [32, 64, 128, 256, 320, 320, 320, 320, 320]
         self.conv_kernel_sizes = [[3] * len(self.patch_size)] * 10
@@ -99,6 +99,9 @@ class MyDefault(ExperimentPlanner):
 
 
 class MyStage5(MyDefault):
+    """
+    nnUNetv2_plan_and_preprocess -d 801 -c 3d_fullres -pl MyStage5 --verify_dataset_integrity
+    """
     def __init__(self, dataset_name_or_id: Union[str, int],
                  gpu_memory_target_in_gb: float = 8,
                  preprocessor_name: str = 'DefaultPreprocessor', plans_name: str = 'stage5Plans',

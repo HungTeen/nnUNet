@@ -10,6 +10,7 @@ nnUNetv2_plan_and_preprocess -d 101 -c 3d_fullres --verify_dataset_integrity
 nnUNetv2_plan_and_preprocess -d 101 -c 3d_fullres -pl Stage5 --verify_dataset_integrity
 nnUNetv2_plan_and_preprocess -d 201 -c 2d --verify_dataset_integrity
 nnUNetv2_plan_and_preprocess -d 201 -c 3d_fullres -pl MyDefault --verify_dataset_integrity
+nohup nnUNetv2_plan_and_preprocess -d 801 -c 3d_fullres -pl MyStage5 --verify_dataset_integrity > main3.out 2>&1 &
 ```
 
 模型训练代码如下：

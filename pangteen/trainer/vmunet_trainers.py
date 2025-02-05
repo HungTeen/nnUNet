@@ -1,22 +1,18 @@
-import pydoc
 from typing import Union, List, Tuple
 
 import torch
 from torch import nn
 
-from pangteen import config
-from pangteen.network.lightm_unet.lightm_unet import LightMUNet
-from pangteen.network.segmamba.segmamba import SegMamba
-from pangteen.network.unetr.unetr import UNETR
+from pangteen.network.vm_unet.vmunet import VMUNet
 from pangteen.trainer.trainers import HTTrainer
 
 
-class LightMUNetTrainer(HTTrainer):
+class VMUNetTrainer(HTTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 200
+        self.num_epochs = 1000
         self.initial_lr = 1e-3
         self.enable_deep_supervision = False
 
@@ -27,15 +23,17 @@ class LightMUNetTrainer(HTTrainer):
                                    num_input_channels: int,
                                    num_output_channels: int,
                                    enable_deep_supervision: bool = True) -> nn.Module:
-        network = LightMUNet(
-            spatial_dims = 3,
-            init_filters = 32,
-            in_channels=num_input_channels,
-            out_channels=num_output_channels,
-            blocks_down=[1, 2, 2, 4],
-            blocks_up=[1, 1, 1],
-        )
+        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
+                                                            num_input_channels, num_output_channels,
+                                                            enable_deep_supervision,
+                                                            print_args=True)
 
+        network = VMUNet(
+            depths=[2, 2, 2, 2],
+            depths_decoder=[2, 2, 2, 1],
+            drop_path_rate=0.2,
+            **architecture_kwargs
+        )
 
         if hasattr(network, 'initialize'):
             network.apply(network.initialize)

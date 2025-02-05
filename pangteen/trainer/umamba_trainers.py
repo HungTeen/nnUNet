@@ -62,7 +62,7 @@ class UMambaEncTrainer(HTTrainer):
                                                             print_args=True)
 
         network = UMambaEnc(
-            input_size=config.ablation_patch_size,
+            input_size=config.patch_size,
             **architecture_kwargs
         )
         network.apply(InitWeights_He(1e-2))
