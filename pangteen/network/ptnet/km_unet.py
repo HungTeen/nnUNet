@@ -13,6 +13,145 @@ from pangteen.network.ptnet.conv_blocks import BasicConvBlock
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import math
 
+from pangteen.network.ptnet.ptnet import PangTeenNet
+
+
+class KM_UNet_3D(PangTeenNet):
+    """
+    PangTeen: 把 UKAN 模型改造成 3D 版本。
+    """
+
+    def __init__(self,
+                 input_channels: int,
+                 n_stages: int,
+                 conv_op: Type[_ConvNd],
+                 kernel_sizes: Union[int, List[int], Tuple[int, ...]],
+                 strides: Union[int, List[int], Tuple[int, ...]],
+                 num_classes: int,
+                 norm_op: Union[None, Type[nn.Module]] = None,
+                 norm_op_kwargs: dict = None,
+                 dropout_op: Union[None, Type[_DropoutNd]] = None,
+                 dropout_op_kwargs: dict = None,
+                 nonlin: Union[None, Type[torch.nn.Module]] = None,
+                 nonlin_kwargs: dict = None,
+                 kan_layer_num: int = 2,
+                 spatial_dim: int = 3,
+                 embed_dims=[32, 64, 256, 320, 512],
+                 # embed_dims=[32, 64, 128, 256, 512],
+                 ss2d_dim=None,  # [16, 32, 128, 160]
+                 no_kan=False,
+                 drop_rate=0.,
+                 drop_path_rate=0.,
+                 norm_layer=nn.LayerNorm,
+                 depths=[1, 1, 1],
+                 **invalid_args,
+                 ):
+        """
+        Args:
+            kan_layer_num: KAN 的层数。
+            spatial_dim: 空间维度。
+        """
+        super().__init__(n_stages, enable_skip_layer=True, skip_merge_type='add', deep_supervision=False)
+
+        # 预设的参数。
+        self.conv_layer_num = n_stages - kan_layer_num
+        self.kan_layer_num = kan_layer_num
+        self.spatial_dim = spatial_dim
+        self.kernel_sizes = kernel_sizes
+        self.strides = strides
+        self.ss2d_enable = ss2d_dim is not None
+        self.ema_enable = False
+
+        self.pool_op = helper.get_matching_pool_op(dimension=self.spatial_dim, pool_type='max')
+        self.interpolate = helper.get_matching_interpolate(dimension=self.spatial_dim)
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        if spatial_dim == 2:
+            self.ss2d_class = SS2D
+            self.ema_class = EMA
+        elif spatial_dim == 3:
+            pass
+        else:
+            raise ValueError(f"Unsupported spatial dimension: {spatial_dim}.")
+
+        # 卷积，直到特征图数量达到 kan_input_dim。
+        in_chans, out_chans = input_channels, embed_dims[0]
+        for i in range(self.conv_layer_num):
+            self.encoder_layers.append(MultiBasicConvBlock(
+                2, input_channels=in_chans, output_channels=out_chans,
+                conv_op=conv_op, kernel_size=3, stride=1,
+                norm_op=norm_op, norm_op_kwargs=norm_op_kwargs
+            ))
+            self.down_sample_blocks.append(UKANDownSampleBlock(
+                pool_op=self.pool_op, kernel_size=kernel_sizes[i], stride=strides[i]
+            ))
+            self.decoder_layers.append(EmptyDecoderBlock())
+
+            in_chans = out_chans
+            out_chans = embed_dims[i + 1]
+
+        self.bottle_neck = nn.Sequential(*[
+            UKANEncoderBlock(
+                in_channels=embed_dims[-2], out_channels=embed_dims[-1],
+                conv_op=conv_op, stride=strides[-1],
+                norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,
+                nonlin=nonlin, nonlin_kwargs=nonlin_kwargs,
+                norm_layer=norm_layer, drop_rate=drop_rate, drop_path_rate=drop_path_rate,
+                no_kan=no_kan
+            ),
+            # UKANUpSampleBlock(
+            #     in_channels=embed_dims[-1], out_channels=embed_dims[-2],
+            #     conv_op=conv_op, interpolate_mode=self.interpolate, stride=strides[-1],
+            #     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs
+            # ),
+            # UKANDecoderBlock(
+            #     in_channels=embed_dims[-2], conv_op=conv_op,
+            #     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,
+            #     nonlin=nonlin, nonlin_kwargs=nonlin_kwargs,
+            #     norm_layer=norm_layer, drop_rate=drop_rate, drop_path_rate=dpr[-1],
+            # )
+        ])
+
+        for i in range(self.kan_layer_num):
+            if i < self.kan_layer_num - 1:
+                self.encoder_layers.append(UKANEncoderBlock(
+                    in_channels=in_chans, out_channels=out_chans,
+                    conv_op=conv_op, stride=strides[i + self.conv_layer_num],
+                    norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,
+                    nonlin=nonlin, nonlin_kwargs=nonlin_kwargs,
+                    norm_layer=norm_layer, drop_rate=drop_rate, drop_path_rate=drop_path_rate,
+                    no_kan=no_kan
+                ))
+            self.down_sample_blocks.append(EmptyDecoderBlock())
+            self.decoder_layers.append(UKANDecoderBlock(
+                in_channels=in_chans, conv_op=conv_op,
+                norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,
+                nonlin=nonlin, nonlin_kwargs=nonlin_kwargs,
+                norm_layer=norm_layer, drop_rate=drop_rate, drop_path_rate=dpr[i],
+            ))
+
+            in_chans = out_chans
+            if i < self.kan_layer_num - 1:
+                out_chans = embed_dims[i + 1 + self.conv_layer_num]
+
+        for i in range(1, n_stages):
+            in_chans, out_chans = embed_dims[i], embed_dims[i - 1]
+            self.up_sample_blocks.append(UKANUpSampleBlock(
+                in_channels=in_chans, out_channels=out_chans,
+                conv_op=conv_op, interpolate_mode=self.interpolate, stride=strides[i],
+                norm_op=norm_op, norm_op_kwargs=norm_op_kwargs
+            ))
+
+        self.seg_layers.append(nn.Sequential(*[
+            UKANUpSampleBlock(
+                in_channels=embed_dims[0], out_channels=embed_dims[0],
+                conv_op=conv_op, interpolate_mode=self.interpolate, stride=strides[0],
+                norm_op=norm_op, norm_op_kwargs=norm_op_kwargs
+            ),
+            BasicConvBlock(
+                input_channels=embed_dims[0], output_channels=num_classes,
+                conv_op=conv_op, kernel_size=1, stride=1,
+            ),
+        ]))
 
 class KM_UNet_3D(nn.Module):
     """

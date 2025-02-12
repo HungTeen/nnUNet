@@ -31,6 +31,7 @@ class PangTeenNet(nn.Module):
                  ):
         """
         Args:
+            n_stages: 网络总共的深度（编码器和解码器的数量+1=n_stages）。
             enable_skip: 如果是True，那么网络会有skip connection。
             skip_merge_type: 可以是'concat'或者'add'。如果是'concat'，那么skip connection会被concatenate到decoder的输出上。
             deep_supervision: 如果是True，那么返回的是一个list，里面包含了每个stage的输出。
@@ -54,11 +55,13 @@ class PangTeenNet(nn.Module):
         skips = []
         for i, encoder_layer in enumerate(self.encoder_layers):
             x = encoder_layer(x)
-            x = self.down_sample_blocks[i](x)
             t = x
+            x = self.down_sample_blocks[i](x)
             if self.enable_skip_layer and len(self.skip_layers) > i and self.skip_layers[i] is not None:
                 t = self.skip_layers[i](t)
+
             skips.append(t)
+
 
         x = self.bottle_neck(x)
         # for i, skip in enumerate(skips):

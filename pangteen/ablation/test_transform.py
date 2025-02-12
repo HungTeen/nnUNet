@@ -8,18 +8,9 @@ import pandas as pd
 from skimage.transform import resize
 
 from pangteen import config, utils
-from pangteen.config import my_image_folder
 
-if __name__ == '__main__':
-    '''
-    将原始Ablation数据的尺寸和Spacing进行转换，方便适配不同的模型。 
-    python -u pangteen/ablation/test_transform.py
-    '''
-    origin_folder = config.ablation_origin_split_folder
-    target_folder = config.my_split_folder
-
-    table_path = os.path.join(config.my_base_folder, "ablation_mapping.xlsx")
-    table = pd.read_excel(table_path)
+def test_transform(origin_folder, target_folder, table_folder, table_name="ablation_mapping.xlsx"):
+    table = pd.read_excel(os.path.join(table_folder, table_name))
     utils.maybe_mkdir(target_folder)
     for filename in utils.next_file(origin_folder):
         image, array, _ = utils.read_image(origin_folder, filename)
@@ -29,4 +20,13 @@ if __name__ == '__main__':
         utils.save_image(array, image, target_folder, target_filename)
 
     print("Finish transform all test split data.")
+
+if __name__ == '__main__':
+    '''
+    对测试集的数据进行重命名。
+    python -u pangteen/ablation/test_transform.py
+    '''
+    test_transform(config.tumor_ablation_config.test_split_folder,
+                   config.tumor_ablation_config.renamed_test_split_folder,
+                   config.tumor_ablation_config.base_folder)
 

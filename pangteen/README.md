@@ -40,4 +40,5 @@ python -u pangteen/time_analyze.py main2.out
 批量删除线程：
 ```bash
 ps -def|grep pangteen|cut -c 9-15|xargs kill -9
+ps -def|grep SegMamba|cut -c 9-15|xargs kill -9
 ```
