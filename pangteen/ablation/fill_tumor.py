@@ -12,7 +12,7 @@ def transform_tumor(predict_folder, predict_filename):
     将历史消融区域标签与当前消融区域标签合并。
     """
     start_time = time()
-    print(f"Transforming {filename} ...")
+    print(f"Transforming {predict_filename} ...")
     # 读取预测的肿瘤图像。
     predict_image, predict_array, _ = utils.read_image(predict_folder, predict_filename)
     # 读取原始消融区域标注。
@@ -41,7 +41,7 @@ def transform_tumor(predict_folder, predict_filename):
 
     # 保存结果。
     utils.save_image(predict_array, predict_image, config.tumor_ablation_config.compose_label_folder, predict_filename)
-    print(f"Transformed {filename} ! Time cost: {time() - start_time:.2f}s")
+    print(f"Transformed {predict_filename} ! Time cost: {time() - start_time:.2f}s")
 
 
 def transform_liver_tumor(predict_folder, predict_filename):
@@ -49,7 +49,7 @@ def transform_liver_tumor(predict_folder, predict_filename):
     将肝脏+肿瘤的预测结果转换为肝脏+肿瘤+消融区域的预测结果。
     """
     start_time = time()
-    print(f"Transforming {filename} ...")
+    print(f"Transforming {predict_filename} ...")
     # 读取预测的肿瘤图像。
     predict_image, predict_array, _ = utils.read_image(predict_folder, predict_filename)
     # 读取原始消融区域标注。
@@ -73,11 +73,11 @@ def transform_liver_tumor(predict_folder, predict_filename):
                     q.append((x, y, z))
                     count += 1
 
-    print("Changed", count, "points to ablation area.")
+    print(f"{predict_filename} Changed", count, "points to ablation area.")
 
     # 保存结果。
     utils.save_image(predict_array, predict_image, config.tumor_ablation_config.compose_label_folder, predict_filename)
-    print(f"Transformed {filename} ! Time cost: {time() - start_time:.2f}s")
+    print(f"Transformed {predict_filename} ! Time cost: {time() - start_time:.2f}s")
 
 
 def transform_liver_ablation(predict_folder, predict_filename):
@@ -119,7 +119,7 @@ def transform_liver_ablation(predict_folder, predict_filename):
 
     # 保存结果。
     utils.save_image(label_array, label_image, config.liver_ablation_config.compose_label_folder, predict_filename)
-    print(f"Transformed {filename} ! Time cost: {time() - start_time:.2f}s")
+    print(f"Transformed {predict_filename} ! Time cost: {time() - start_time:.2f}s")
 
 
 if __name__ == '__main__':
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     folder = config.tumor_ablation_config.predict_folder
 
     for filename in utils.next_file(folder, sort=True):
-        p.apply_async(transform_liver_ablation, args=(folder, filename))
+        p.apply_async(transform_liver_tumor, args=(folder, filename))
 
     p.close()
     p.join()

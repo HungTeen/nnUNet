@@ -387,7 +387,7 @@ class nnUNetTrainer(object):
             self.batch_size = batch_size_per_GPU[my_rank]
             self.oversample_foreground_percent = oversample_percent
 
-    def _build_loss(self):
+    def configure_loss(self):
         if self.label_manager.has_regions:
             loss = DC_and_BCE_loss({},
                                    {'batch_dice': self.configuration_manager.batch_dice,
@@ -398,6 +398,10 @@ class nnUNetTrainer(object):
             loss = DC_and_CE_loss({'batch_dice': self.configuration_manager.batch_dice,
                                    'smooth': 1e-5, 'do_bg': False, 'ddp': self.is_ddp}, {}, weight_ce=1, weight_dice=1,
                                   ignore_label=self.label_manager.ignore_label, dice_class=MemoryEfficientSoftDiceLoss)
+        return loss
+
+    def _build_loss(self):
+        loss = self.configure_loss()
 
         if self._do_i_compile():
             loss.dc = torch.compile(loss.dc)

@@ -17,6 +17,7 @@ def get_base_folder():
     return base_folder
 my_folder = get_base_folder()
 predict_folder = join(my_folder, 'predict')  # 存放模型预测结果。
+test_id_set = [2, 3, 10, 12, 13, 15, 20, 28, 32, 34, 36, 37, 44, 47, 48, 57, 61, 71, 73, 76]  # 测试集的 id。
 
 # 任务设置相关
 config_list = []
@@ -49,9 +50,11 @@ class AblationConfig(BaseConfig):
         self.origin_label_folder = join(self.origin_folder, 'label')
         self.origin_contrast_folder = join(self.origin_folder, 'contrast')
         self.origin_split_folder = join(self.origin_folder, 'test_split')
+        self.image_folder = join(self.base_folder, 'image')
+        self.label_folder = join(self.base_folder, 'label')
 
     def get_label_path(self, image_filename):
-        return join(self.origin_label_folder, image_filename)
+        return join(self.label_folder, image_filename)
 
 class MyAblationConfig(BaseConfig):
     """
@@ -201,6 +204,6 @@ tumor_ablation_config = TumorAblationConfig()
 liver_ablation_config = LiverAblationConfig()
 renal_config = RenalConfig()
 kits_config = KiTSConfig()
-main_config: BaseConfig = tumor_ablation_config
+main_config: BaseConfig = ablation_config
 patch_size = main_config.patch_size
 label_map = main_config.label_map

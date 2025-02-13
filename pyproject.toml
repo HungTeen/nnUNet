@@ -56,7 +56,7 @@ dependencies = [
     "openpyxl",
     "causal_conv1d",
     "monai",
-    "mamba",
+    "mamba_ssm",
     # blosc2
 ]
 

@@ -9,12 +9,11 @@ from nnunetv2.paths import nnUNet_raw
 
 # Dataset 250: 原始 XRay。
 def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_dataset_id: int = 250):
-    task_config = config.tumor_ablation_config
+    task_config = config.liver_ablation_config
     task_name = task_config.task_name
 
     image_folder = join(task_config.base_folder, image_folder_name)
     label_folder = join(task_config.base_folder, label_folder_name)
-    test_folder = config.tumor_ablation_config.renamed_test_split_folder
     foldername = "Dataset%03.0d_%s" % (nnunet_dataset_id, task_name)
 
     out_base = join(nnUNet_raw, foldername)
@@ -26,17 +25,8 @@ def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_data
     maybe_mkdir_p(label_str)
 
     image_ids = subfiles(image_folder, join=False)
-    test_ids = subfiles(test_folder, join=False)
 
-    # 使用预先划分好的测试集。
-    for i in test_ids:
-        image_id = i
-        shutil.copy(join(test_folder, image_id), join(test_str, utils.append_name(image_id, "_0000")))
-        print("Finish test set of {}".format(image_id))
-
-    print("Test data : {}".format(len(test_ids)))
-    left_lits_test_count = 25
-
+    left_lits_test_count = 10
     train_len = 0
 
     # 打乱数据集。
@@ -50,9 +40,8 @@ def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_data
         choose_test = False
 
         # id小于90的数据集，使用预先划分好的测试集。否则，选择25个数据集作为测试集。
-        if case_id < 90:
-            if i in test_ids:
-                choose_test = True
+        if case_id in config.test_id_set:
+            choose_test = True
         else:
             if left_lits_test_count > 0:
                 left_lits_test_count -= 1
@@ -75,9 +64,8 @@ def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_data
                           },
                           labels={
                               "background": 0,
-                              "liver": 1,
-                              "tumor": 2,
-                              "ablation": 3
+                              "ablation": 1,
+                              "histroy ablation": 2
                           },
                           num_training_cases=train_len, file_ending='.nii.gz',
                           dataset_name=task_name, reference='none',
@@ -88,7 +76,7 @@ def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_data
 
 if __name__ == '__main__':
     '''
-    python -u pangteen/dataset/Dataset100_TumorAblation.py renamed_image renamed_label -d 101
+    python -u pangteen/dataset/Dataset500_LiverAblation.py renamed_image renamed_label -d 501
     '''
     import argparse
     parser = argparse.ArgumentParser()

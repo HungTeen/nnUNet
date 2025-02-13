@@ -21,6 +21,17 @@ def test_transform(origin_folder, target_folder, table_folder, table_name="ablat
 
     print("Finish transform all test split data.")
 
+
+def label_transform():
+    folder = config.liver_ablation_config.label_folder
+    for filename in utils.next_file(folder):
+        case_id = int(filename.split('_')[1].split('.')[0])
+        if case_id < 84:
+            continue
+        image, array, _ = utils.read_image(folder, filename)
+        array[array == 1] = 2
+        utils.save_image(array, image, folder, filename)
+
 if __name__ == '__main__':
     '''
     对测试集的数据进行重命名。

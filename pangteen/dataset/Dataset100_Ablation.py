@@ -5,13 +5,15 @@ from pangteen import config, utils
 from nnunetv2.dataset_conversion.generate_dataset_json import generate_dataset_json
 from nnunetv2.paths import nnUNet_raw
 
+# Dataset 100: 原始 XRay。
 # Dataset 101: 原始 XRay。
 # dataset 102: 预处理 XRay。
 def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_dataset_id: int = 220):
     task_name = "Ablation"
 
-    image_folder = join(config.ablation_origin_folder, image_folder_name)
-    label_folder = join(config.ablation_origin_folder, label_folder_name)
+    image_folder = join(config.tumor_ablation_config.rescale_image_folder, image_folder_name)
+    label_folder = join(config.tumor_ablation_config.rescale_label_folder, label_folder_name)
+    test_folder = config.ablation_origin_split_folder
     foldername = "Dataset%03.0d_%s" % (nnunet_dataset_id, task_name)
 
     out_base = join(nnUNet_raw, foldername)

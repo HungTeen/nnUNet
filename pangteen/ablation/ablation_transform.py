@@ -12,6 +12,21 @@ from skimage.transform import resize
 from pangteen import config, utils
 from pangteen.util.resample import resample
 
+def default_transform(origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename,
+              target_filename):
+    print("Processing: ", filename, " -> ", target_filename)
+    # 如果已经存在，则跳过。
+    if os.path.exists(os.path.join(target_image_folder, target_filename)):
+        print("Skip: ", filename)
+        return
+
+    data_image, data_array, data_spacing = utils.read_image(origin_image_folder, filename)
+    label_image, label_array, label_spacing = utils.read_image(origin_label_folder, filename)
+
+    # Save the data and label.
+    utils.save_image(data_array, data_image, target_image_folder, target_filename)
+    utils.save_image(label_array, label_image, target_label_folder, target_filename)
+
 
 def transform(origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename,
               target_filename, targetXYSize=256, targetZSpacing=1):
@@ -84,8 +99,6 @@ def deprecated_transform():
 def transform_tumor_ablation():
     '''
     将原始Ablation数据的尺寸和Spacing进行转换，方便适配不同的模型。
-    python -u pangteen/ablation/ablation_transform.py
-    nohup python -u pangteen/ablation/ablation_transform.py > main3.out 2>&1 &
     '''
     origin_image_folder = config.tumor_ablation_config.rescale_image_folder
     origin_label_folder = config.tumor_ablation_config.compose_label_folder
@@ -141,11 +154,9 @@ def transform_tumor_ablation():
     print("=========> Finish all transforms ! Cost {} seconds.".format(time() - start_time))
 
 
-if __name__ == '__main__':
+def transform_liver_ablation():
     '''
-    将原始Ablation数据的尺寸和Spacing进行转换，方便适配不同的模型。
-    python -u pangteen/ablation/ablation_transform.py
-    nohup python -u pangteen/ablation/ablation_transform.py > main3.out 2>&1 &
+        将原始Ablation数据的尺寸和Spacing进行转换，方便适配不同的模型。
     '''
     origin_image_folder = config.tumor_ablation_config.rescale_image_folder
     origin_label_folder = config.liver_ablation_config.compose_label_folder
@@ -175,7 +186,8 @@ if __name__ == '__main__':
         mapping_table.append([target_filename])
 
         p.apply_async(transform, args=(
-        origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename, target_filename))
+            origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename,
+            target_filename))
 
     origin_image_folder = config.liver_ablation_config.history_image_folder
     origin_label_folder = config.liver_ablation_config.history_label_folder
@@ -190,6 +202,48 @@ if __name__ == '__main__':
         mapping_table.append([target_filename])
 
         p.apply_async(transform, args=(
+            origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename,
+            target_filename))
+
+    pd.DataFrame(mapping_table, index=rows, columns=['new_name']).to_excel('ablation_mapping.xlsx')
+
+    p.close()
+    p.join()
+    print("=========> Finish all transforms ! Cost {} seconds.".format(time() - start_time))
+
+if __name__ == '__main__':
+    '''
+    将原始Ablation数据的尺寸和Spacing进行转换，方便适配不同的模型。
+    python -u pangteen/ablation/ablation_transform.py
+    nohup python -u pangteen/ablation/ablation_transform.py > main3.out 2>&1 &
+    '''
+    origin_image_folder = config.tumor_ablation_config.rescale_image_folder
+    origin_label_folder = config.tumor_ablation_config.rescale_label_folder
+    target_image_folder = config.ablation_config.image_folder
+    target_label_folder = config.ablation_config.label_folder
+
+    case_id = 0
+
+    rows = []
+    mapping_table = []
+
+    utils.maybe_mkdir(target_image_folder)
+    utils.maybe_mkdir(target_label_folder)
+
+    p = Pool(config.max_cpu_cnt)  # 多进程。
+    print("=========> Start transform tasks !")
+    start_time = time()
+
+    for filename in utils.next_file(origin_image_folder, sort=True):
+        # Rename the file.
+        target_filename = 'LiverAblation_{:04d}.nii.gz'.format(case_id)
+        case_id += 1
+
+        # Save Mapping.
+        rows.append(filename)
+        mapping_table.append([target_filename])
+
+        p.apply_async(default_transform, args=(
         origin_image_folder, origin_label_folder, target_image_folder, target_label_folder, filename, target_filename))
 
     pd.DataFrame(mapping_table, index=rows, columns=['new_name']).to_excel('ablation_mapping.xlsx')
