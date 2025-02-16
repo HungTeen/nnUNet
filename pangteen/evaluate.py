@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from nnunetv2.utilities.file_path_utilities import get_specific_folder
+from nnunetv2.utilities.file_path_utilities import get_specific_folder, get_output_folder
 from pangteen import config, utils
 from pangteen.util import metrics as m
 
@@ -58,7 +58,7 @@ def get_worst_val(name):
 
 class MetricManager:
 
-    def __init__(self, result_folder, task_config: config.BaseConfig):
+    def __init__(self, result_folder, task_config: config.BaseConfig, val=False, train=False):
         """
         Args:
             result_folder: 预测结果文件夹。
@@ -66,6 +66,8 @@ class MetricManager:
         """
         self.labels = list(task_config.label_map.values())[1:]  # 除了背景外的标签。
         self.task_config = task_config
+        self.val = val
+        self.train = train
         self.label_map = {}
         for k, v in task_config.label_map.items():
             self.label_map[v] = k  # 标签名字 -> 标签值。
@@ -133,7 +135,7 @@ class MetricManager:
                 self.summary_table_data[i, j] = round(self.summary_table_data[i, j], 4)
                 print("Table data for row : {}; col : {} is {}".format(label, metric, self.summary_table_data[i, j]))
 
-        table_writer = pd.ExcelWriter('evaluate_test_data.xlsx')
+        table_writer = pd.ExcelWriter('evaluate_val_data.xlsx' if self.val else 'evaluate_test_data.xlsx' if not self.train else 'evaluate_train_data.xlsx')
         table = pd.DataFrame(data=self.summary_table_data, index=self.summary_row_titles, columns=self.summary_col_titles)
         table.to_excel(table_writer, sheet_name='Summary')
 
@@ -209,17 +211,29 @@ def main():
                              'Default: (0, 1, 2, 3, 4)')
     parser.add_argument('-t', type=str, required=False,
                         help='The test data name to evaluate, default is default config.')
+    parser.add_argument('--evaluate_val', action='store_true', required=False, default=False,
+                        help='Evaluate the validation data instead of test data.')
+    parser.add_argument('--evaluate_train', action='store_true', required=False, default=False,
+                        help='Evaluate the train data instead of test data.')
     args = parser.parse_args()
 
     folds = [i if i == 'all' else int(i) for i in args.f]
     if args.i is None:
-        result_folder = get_specific_folder(config.predict_folder, args.d, args.tr, args.p, args.c, folds)
+        if args.evaluate_val:
+            folds = folds[0]
+            result_folder = get_output_folder(args.d, args.tr, args.p, args.c, folds)
+            result_folder = os.path.join(result_folder, 'validation')
+        else:
+            if args.evaluate_train:
+                result_folder = get_specific_folder(config.predict_train_folder, args.d, args.tr, args.p, args.c, folds)
+            else:
+                result_folder = get_specific_folder(config.predict_folder, args.d, args.tr, args.p, args.c, folds)
     else:
         result_folder = args.i
 
     task_config = utils.get_task_config(args.t)
 
-    manager = MetricManager(result_folder=result_folder, task_config=task_config)
+    manager = MetricManager(result_folder=result_folder, task_config=task_config, val=args.evaluate_val, train=args.evaluate_train)
     manager.evaluate()
 
 

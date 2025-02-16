@@ -15,6 +15,7 @@ class BasicConvBlock(nn.Module):
     """
     通用的基础卷积块，包含卷积、规范化、dropout和非线性激活函数。
     """
+
     def __init__(self,
                  input_channels: int,
                  output_channels: int,
@@ -84,6 +85,7 @@ class BasicConvBlock(nn.Module):
         output_size = [i // j for i, j in zip(input_size, self.stride)]  # we always do same padding
         return np.prod([self.output_channels, *output_size], dtype=np.int64)
 
+
 class MultiBasicConvBlock(nn.Module):
     """
     多个基础卷积块，包含卷积、规范化、dropout和非线性激活函数。
@@ -144,6 +146,7 @@ class MultiBasicConvBlock(nn.Module):
     def forward(self, x):
         return self.convs(x) if self.num_convs > 0 else x
 
+
 class DownSampleBlock(nn.Module):
     """
     下采样块，包含卷积、规范化、dropout和非线性激活函数。
@@ -187,12 +190,53 @@ class UpSampleBlock(nn.Module):
         super().__init__()
         trans_conv_op = get_matching_convtransp(conv_op)
         self.up_sample = trans_conv_op(
-                input_channels, out_channels, stride, stride,
-                bias=conv_bias
-            )
+            input_channels, out_channels, stride, stride,
+            bias=conv_bias
+        )
 
     def forward(self, x):
         return self.up_sample(x)
+
+
+class BasicResBlock(nn.Module):
+    def __init__(
+            self,
+            input_channels: int,
+            output_channels: int,
+            conv_op: Type[_ConvNd],
+            kernel_size: Union[int, List[int], Tuple[int, ...]],
+            stride: Union[int, List[int], Tuple[int, ...]],
+            conv_group: int = 1,
+            conv_bias: bool = False,
+            norm_op: Union[None, Type[nn.Module]] = None,
+            norm_op_kwargs: dict = None,
+            nonlin: Union[None, Type[torch.nn.Module]] = None,
+            nonlin_kwargs: dict = None,
+            use_1x1conv: bool = False
+    ):
+        super().__init__()
+        self.conv1 = BasicConvBlock(
+            input_channels, output_channels, conv_op, kernel_size, stride, conv_group, conv_bias, norm_op,
+            norm_op_kwargs, nonlin=nonlin, nonlin_kwargs=nonlin_kwargs
+        )
+        self.conv2 = BasicConvBlock(
+            output_channels, output_channels, conv_op, kernel_size, 1, conv_group, conv_bias, norm_op,
+            norm_op_kwargs
+        )
+        self.nonlin = nonlin(**nonlin_kwargs)
+
+        if use_1x1conv:
+            self.conv3 = conv_op(input_channels, output_channels, kernel_size=1, stride=stride)
+        else:
+            self.conv3 = None
+
+    def forward(self, x):
+        y = self.conv1(x)
+        y = self.conv2(y)
+        if self.conv3:
+            x = self.conv3(x)
+        y += x
+        return self.nonlin(y)
 
 
 class GSC(nn.Module):
@@ -229,7 +273,6 @@ class GSC(nn.Module):
                                     conv_bias=conv_bias, norm_op=norm_op,
                                     dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs, nonlin=nonlin,
                                     nonlin_first=nonlin_first)
-
 
     def forward(self, x):
         x_residual = x

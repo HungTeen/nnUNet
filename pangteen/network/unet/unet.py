@@ -80,19 +80,19 @@ class PlainConvUNet(nn.Module):
 
 
 if __name__ == "__main__":
-    # network = PlainConvUNet(
-    #     input_channels=1,
-    #     n_stages=6,
-    #     features_per_stage= [32, 64, 128, 256, 320, 320],
-    #     conv_op= nn.Conv3d,
-    #     kernel_sizes = [[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
-    #     strides = [[1, 1, 1], [1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
-    #     n_conv_per_stage=[2, 2, 2, 2, 2, 2],
-    #     num_classes=2,
-    #     n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
-    #     conv_bias= True,
-    #     deep_supervision=True
-    # ).cuda()
+    network = PlainConvUNet(
+        input_channels=1,
+        n_stages=6,
+        features_per_stage= [32, 64, 128, 256, 320, 320],
+        conv_op= nn.Conv3d,
+        kernel_sizes = [[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
+        strides = [[1, 1, 1], [1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
+        n_conv_per_stage=[2, 2, 2, 2, 2, 2],
+        num_classes=2,
+        n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
+        conv_bias= True,
+        deep_supervision=True
+    ).cuda()
 
     x = torch.zeros((2, 1, 20, 320, 256), requires_grad=False).cuda()
     print(x.data_ptr())

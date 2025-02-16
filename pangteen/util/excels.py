@@ -15,6 +15,24 @@ print(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pangteen import config, utils
 import seaborn as sns
 
+def get_mapping_name(filename, table_folder, table_name="ablation_mapping.xlsx"):
+    """
+    获取映射后的文件名。
+    """
+    table = pd.read_excel(os.path.join(table_folder, table_name))
+    row = table.loc[table["origin_name"] == filename]
+    target_filename = row["new_name"].values[0]
+    return target_filename
+
+
+def get_mapped_name(filename, table_folder, table_name="ablation_mapping.xlsx"):
+    """
+    获取映射前的文件名。
+    """
+    table = pd.read_excel(os.path.join(table_folder, table_name))
+    row = table.loc[table["new_name"] == filename]
+    target_filename = row["origin_name"].values[0]
+    return target_filename
 
 def collect_all_image_size():
     folder = config.origin_image_folder
@@ -94,21 +112,21 @@ def collect_hu():
 
     print("Finish collecting all image size.")
 
-def contrast(image_folder=config.origin_image_folder, result_folder=config.origin_contrast_folder, suffix = "", lower_hu = -100, upper_hu = 300):
-    for filename in utils.next_file(image_folder):
-        image, image_array, _ = utils.read_image_new(image_folder, filename)
-        lower_mask = image_array < lower_hu
-        upper_mask = image_array > upper_hu
-        image_array[lower_mask] = 0
-        image_array[upper_mask] = 255
-        common_mask = ~lower_mask & ~upper_mask
-        image_array[common_mask] = (image_array[common_mask] - lower_hu) / (upper_hu - lower_hu) * 255
-        # utils.save_image_new(image_array, image, result_folder, filename)
-        filename = utils.wrap_niigz(utils.unwrap_niigz(filename) + suffix)
-        utils.save_image_new(image_array, image, result_folder, filename)
-        print(f"Finish processing {filename}.")
-
-    print("Finish contrast.")
+# def contrast(image_folder=config.origin_image_folder, result_folder=config.origin_contrast_folder, suffix = "", lower_hu = -100, upper_hu = 300):
+#     for filename in utils.next_file(image_folder):
+#         image, image_array, _ = utils.read_image_new(image_folder, filename)
+#         lower_mask = image_array < lower_hu
+#         upper_mask = image_array > upper_hu
+#         image_array[lower_mask] = 0
+#         image_array[upper_mask] = 255
+#         common_mask = ~lower_mask & ~upper_mask
+#         image_array[common_mask] = (image_array[common_mask] - lower_hu) / (upper_hu - lower_hu) * 255
+#         # utils.save_image_new(image_array, image, result_folder, filename)
+#         filename = utils.wrap_niigz(utils.unwrap_niigz(filename) + suffix)
+#         utils.save_image_new(image_array, image, result_folder, filename)
+#         print(f"Finish processing {filename}.")
+#
+#     print("Finish contrast.")
 
 
 def main():

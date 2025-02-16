@@ -82,6 +82,9 @@ class ChannelAttentionBlock(nn.Module):
 
 
 class SpatialAttentionBlock(nn.Module):
+    """
+    对CPCANet中的空间注意力块进行扩展，支持3D模型。
+    """
 
     def __init__(self,
                  channels : int,

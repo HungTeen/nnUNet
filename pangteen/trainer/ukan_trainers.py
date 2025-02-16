@@ -16,7 +16,6 @@ class UKanTrainer(HTTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 500
         self.initial_lr = 1e-2
         self.enable_deep_supervision = False
 
@@ -30,6 +29,7 @@ class UKanTrainer(HTTrainer):
         architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
                                                             num_input_channels, num_output_channels,
                                                             enable_deep_supervision,
+                                                            n_stages=5,
                                                             print_args=True)
 
         network = UKAN_3D(
@@ -61,7 +61,9 @@ class SmallUKanTrainer(UKanTrainer):
         architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
                                                             num_input_channels, num_output_channels,
                                                             enable_deep_supervision,
-                                                            print_args=True)
+                                                            print_args=True,
+                                                            n_stages=5
+                                                            )
 
         network = UKAN_3D(
             embed_dims=[32, 64, 128, 256, 512],

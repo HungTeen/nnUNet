@@ -9,9 +9,9 @@ from typing import Union, Type, List, Tuple, Optional
 from pangteen.network.ptnet.conv_blocks import DownSampleBlock, UpSampleBlock, BasicConvBlock, MultiBasicConvBlock
 from pangteen.network.ptnet.ptnet import PangTeenNet
 
-class PangTeenUNet(PangTeenNet):
+class nnUNet(PangTeenNet):
     """
-    微调过的UNet网络结构。
+    仿照nnUNet的格式设计的易于扩展的网络结构。
     """
     def __init__(self,
                  input_channels: int,
@@ -61,9 +61,9 @@ class PangTeenUNet(PangTeenNet):
         assert len(features_per_stage) == n_stages, "features_per_stage must have as many entries as we have resolution stages (n_stages)"
         assert len(strides) == n_stages, "strides must have as many entries as we have resolution stages (n_stages). " \
                                              "Important: first entry is recommended to be 1, else we run strided conv drectly on the input"
-        for s in range(n_stages - 1):
+        for s in range(n_stages):
             self.down_sample_blocks.append(DownSampleBlock(
-                conv_op, features_per_stage[s], features_per_stage[s], kernel_sizes[s], strides[s],
+                conv_op, input_channels, input_channels, kernel_sizes[s], strides[s],
                 conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs, pool
             ))
             self.encoder_layers.append(MultiBasicConvBlock(
@@ -71,8 +71,11 @@ class PangTeenUNet(PangTeenNet):
                 conv_op, kernel_sizes[s], 1, 1, conv_bias,
                 norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
             ))
+            input_channels = features_per_stage[s]
+
+        for s in range(n_stages - 1):
             self.up_sample_blocks.append(UpSampleBlock(
-                conv_op, features_per_stage[s + 1], features_per_stage[s], strides[s], conv_bias
+                conv_op, features_per_stage[s + 1], features_per_stage[s], strides[s + 1], conv_bias
             ))
             self.decoder_layers.append(MultiBasicConvBlock(
                 n_conv_per_stage_decoder[s], features_per_stage[s] * 2, features_per_stage[s], conv_op,
@@ -82,17 +85,48 @@ class PangTeenUNet(PangTeenNet):
             self.seg_layers.append(BasicConvBlock(
                 features_per_stage[s], num_classes, conv_op, 1, 1, 1, conv_bias
             ))
-            input_channels = features_per_stage[s]
 
-        self.bottle_neck = MultiBasicConvBlock(
-            n_conv_per_stage[-1], features_per_stage[-2], features_per_stage[-1],
-            conv_op, kernel_sizes[-1], 1, 1, conv_bias,
-            norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
-        )
+        self.bottle_neck = None
+
+    def forward(self, x):
+        skips = []
+        for i, encoder_layer in enumerate(self.encoder_layers):
+            x = self.down_sample_blocks[i](x)
+            x = encoder_layer(x)
+            t = x
+            # 降采样之后才会有 skip！并且瓶颈层没有 skip！
+            if i < self.n_stages - 1:
+                if self.enable_skip_layer and len(self.skip_layers) > i and self.skip_layers[i] is not None:
+                    t = self.skip_layers[i](t)
+                skips.append(t)
+
+        # x = self.bottle_neck(x)
+
+        # for i, skip in enumerate(skips):
+        #     print("skip {}: {}".format(i, skip.size()))
+
+        seg_outputs = []
+        for i in range(1, self.n_stages):
+            # print(x.size())
+            x = self.up_sample_blocks[-i](x)
+            # print(x.size())
+            x = self.connect_skip(i, x, skips[-i])
+            x = self.decoder_layers[-i](x)
+            if self.deep_supervision:
+                seg_outputs.append(self.seg_layers[- i](x))
+
+        if not self.deep_supervision:
+            seg_outputs.append(self.seg_layers[0](x))
+
+        seg_outputs = seg_outputs[::-1]
+        if self.deep_supervision:
+            return seg_outputs
+        else:
+            return seg_outputs[-1]
 
 
 if __name__ == "__main__":
-    network = PangTeenUNet(
+    network = nnUNet(
         input_channels=1,
         n_stages=6,
         features_per_stage= [32, 64, 128, 256, 320, 320],

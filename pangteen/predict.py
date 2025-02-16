@@ -47,6 +47,8 @@ def predict_entry_point():
     parser.add_argument('--save_probabilities', action='store_true',
                         help='Set this to export predicted class "probabilities". Required if you want to ensemble '
                              'multiple configurations.')
+    parser.add_argument('--predict_train', action='store_true',
+                        help='Predict the training cases (in the same folder structure as the test cases).')
     parser.add_argument('--continue_prediction', action='store_true',
                         help='Continue an aborted previous prediction (will not overwrite existing files)')
     parser.add_argument('-chk', type=str, required=False, default='best',
@@ -81,12 +83,18 @@ def predict_entry_point():
     model_folder = get_output_folder(args.d, args.tr, args.p, args.c)
 
     if args.i is None:
-        input_folder = os.path.join(nnUNet_raw, maybe_convert_to_dataset_name(args.d), "imagesTs")
+        if args.predict_train:
+            input_folder = os.path.join(nnUNet_raw, maybe_convert_to_dataset_name(args.d), "imagesTr")
+        else:
+            input_folder = os.path.join(nnUNet_raw, maybe_convert_to_dataset_name(args.d), "imagesTs")
     else:
         input_folder = args.i
 
     if args.o is None:
-        output_folder = get_specific_folder(config.predict_folder, args.d, args.tr, args.p, args.c, folds)
+        if args.predict_train:
+            output_folder = get_specific_folder(config.predict_train_folder, args.d, args.tr, args.p, args.c, folds)
+        else:
+            output_folder = get_specific_folder(config.predict_folder, args.d, args.tr, args.p, args.c, folds)
     else:
         output_folder = args.o
 

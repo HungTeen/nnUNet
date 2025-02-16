@@ -25,7 +25,7 @@ class PangTeenNet(nn.Module):
     def __init__(self,
                  n_stages: int,
                  enable_skip_layer: bool = True,
-                 skip_merge_type: str = 'concat',
+                 skip_merge_type: Optional[str] = 'concat',  # 可以是'concat'或者'add'或者None。
                  deep_supervision: bool = False,
                  **invalid_args
                  ):
@@ -42,13 +42,22 @@ class PangTeenNet(nn.Module):
         self.skip_merge_type = skip_merge_type
         self.deep_supervision = deep_supervision
 
+        # 编码器层，一共有n_stages-1个编码器层。
         self.encoder_layers = nn.ModuleList()
-        self.down_sample_blocks = nn.ModuleList()  # 降采样，改变空间大小。
-        self.skip_layers = nn.ModuleList()  # 跳跃连接层的处理。
-        self.bottle_neck: Optional[nn.Module] = None  # 瓶颈层，中间层。
-        self.up_sample_blocks = nn.ModuleList()  # 上采样，还原空间大小。
+        # 降采样，改变空间大小，一共有n_stages-1个降采样层。
+        self.down_sample_blocks = nn.ModuleList()
+        # 跳跃连接层的处理。
+        self.skip_layers = nn.ModuleList()
+        # 瓶颈层，中间层。
+        self.bottle_neck: Optional[nn.Module] = None
+        # 上采样，还原空间大小，一共有n_stages-1个上采样层。
+        self.up_sample_blocks = nn.ModuleList()
+        # 解码器层，一共有n_stages-1个解码器层。
         self.decoder_layers = nn.ModuleList()
-        self.seg_layers = nn.ModuleList()  # 输出分割结果。
+        # 分割层，输出分割结果，一共有n_stages-1个分割层（可深度监督）。
+        self.seg_layers = nn.ModuleList()
+        # 跳跃连接层的合并，当skip_merge_type是None时，需要这个层。
+        self.skip_merge_blocks = nn.ModuleList()
 
 
     def forward(self, x):
@@ -62,7 +71,6 @@ class PangTeenNet(nn.Module):
 
             skips.append(t)
 
-
         x = self.bottle_neck(x)
         # for i, skip in enumerate(skips):
         #     print("skip {}: {}".format(i, skip.size()))
@@ -72,7 +80,9 @@ class PangTeenNet(nn.Module):
             x = self.up_sample_blocks[-i](x)
 
             if self.enable_skip_layer:
-                if self.skip_merge_type == 'concat':
+                if self.skip_merge_type is None:
+                    x = self.skip_merge_blocks[- i](x, skips[- i])
+                elif self.skip_merge_type == 'concat':
                     x = torch.cat([x, skips[- i]], dim=1)
                 elif self.skip_merge_type == 'add':
                     x = x + skips[- i]
@@ -101,4 +111,16 @@ class PangTeenNet(nn.Module):
     @staticmethod
     def initialize(module):
         InitWeights_He(1e-2)(module)
+
+    def connect_skip(self, i, x, skip):
+        if self.enable_skip_layer:
+            if self.skip_merge_type is None:
+                x = self.skip_merge_blocks[- i](x, skip)
+            elif self.skip_merge_type == 'concat':
+                x = torch.cat([x, skip], dim=1)
+            elif self.skip_merge_type == 'add':
+                x = x + skip
+            else:
+                raise ValueError("skip_merge_type should be 'concat' or 'add'")
+        return x
 

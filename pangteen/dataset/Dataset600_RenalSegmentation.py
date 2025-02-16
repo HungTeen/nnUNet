@@ -12,8 +12,8 @@ from pangteen.renal import setting
 
 # Dataset 101: 原始 XRay。
 def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_dataset_id: int = 600):
-    task_name = "MyAblation"
     task_config = config.renal_config
+    task_name = task_config.task_name
 
     image_folder = join(task_config.origin_folder, image_folder_name)
     label_folder = join(task_config.origin_folder, label_folder_name)
@@ -28,7 +28,6 @@ def convert_ablation(image_folder_name: str, label_folder_name: str, nnunet_data
     maybe_mkdir_p(label_str)
 
     valid_ids = setting.get_valid_ids(70)
-
 
     image_filenames = subfiles(image_folder, join=False)
     test_ids = []

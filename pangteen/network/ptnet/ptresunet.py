@@ -49,10 +49,10 @@ class MultiResBlock(nn.Module):
         self.conv_blocks = nn.ModuleList()
         input_channels = in_channels
         for idx in range(len(weights)):
-            next_channels = int(out_channels * weights[idx])
-            BasicConvBlock(input_channels, next_channels, conv_op, 3, 1, 1, conv_bias
+            next_channels = round(out_channels * weights[idx])
+            self.conv_blocks.append(BasicConvBlock(input_channels, next_channels, conv_op, 3, 1, 1, conv_bias
                            , norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
-                           )
+                           ))
             input_channels = next_channels
         self.conv1 = BasicConvBlock(in_channels, out_channels, conv_op, 1, 1,
                                     1, conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin,
@@ -158,6 +158,7 @@ class PangTeenMultiResUNet(PangTeenNet):
             features_per_stage) == n_stages, "features_per_stage must have as many entries as we have resolution stages (n_stages)"
         assert len(strides) == n_stages, "strides must have as many entries as we have resolution stages (n_stages). " \
                                          "Important: first entry is recommended to be 1, else we run strided conv drectly on the input"
+        features_per_stage[-1] = 512
         for s in range(n_stages - 1):
             self.down_sample_blocks.append(DownSampleBlock(
                 conv_op, features_per_stage[s], features_per_stage[s], kernel_sizes[s], strides[s],
@@ -194,11 +195,11 @@ class PangTeenMultiResUNet(PangTeenNet):
 
 if __name__ == "__main__":
     # 设置CUDA可见设备
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-    network = PangTeenResUNet(
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    network = PangTeenMultiResUNet(
         input_channels=1,
         n_stages=6,
-        features_per_stage=[32, 64, 128, 256, 320, 320],
+        features_per_stage=[32, 64, 128, 256, 320, 512],
         # features_per_stage= [16, 32, 64, 128, 256, 512],
         conv_op=nn.Conv3d,
         kernel_sizes=[[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],

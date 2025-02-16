@@ -1,7 +1,9 @@
-from typing import Union, List, Tuple
+from os.path import join, isfile
+from typing import Union, List, Tuple, Optional
 
 import numpy as np
 import torch
+from batchgenerators.utilities.file_and_folder_operations import save_json, load_json
 from batchgeneratorsv2.helpers.scalar_type import RandomScalar
 from batchgeneratorsv2.transforms.base.basic_transform import BasicTransform
 from batchgeneratorsv2.transforms.intensity.brightness import MultiplicativeBrightnessTransform
@@ -27,7 +29,10 @@ from dynamic_network_architectures.architectures.unet import PlainConvUNet
 from torch import nn
 
 from nnunetv2.training.data_augmentation.custom_transforms.transforms_for_dummy_2d import Convert3DTo2DTransform
+from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDataset
+from nnunetv2.training.dataloading.utils import get_case_identifiers
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
+from nnunetv2.utilities.crossval_split import generate_lock_split
 from pangteen import config
 from pangteen.network.common.helper import get_matching_dropout
 
@@ -37,7 +42,57 @@ class HTTrainer(nnUNetTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 1000
+        self.num_epochs = 300
+
+    # def do_split(self):
+    #     """
+    #     固定划分训练集和验证集。
+    #     """
+    #     if self.fold == "all":
+    #         # if fold==all then we use all images for training and validation
+    #         case_identifiers = get_case_identifiers(self.preprocessed_dataset_folder)
+    #         tr_keys = case_identifiers
+    #         val_keys = tr_keys
+    #     else:
+    #         splits_file = join(self.preprocessed_dataset_folder_base, "splits_final.json")
+    #         dataset = nnUNetDataset(self.preprocessed_dataset_folder, case_identifiers=None,
+    #                                 num_images_properties_loading_threshold=0,
+    #                                 folder_with_segs_from_previous_stage=self.folder_with_segs_from_previous_stage)
+    #         # if the split file does not exist we need to create it
+    #         if not isfile(splits_file):
+    #             self.print_to_log_file("Creating new 5-fold cross-validation split...")
+    #             all_keys_sorted = list(np.sort(list(dataset.keys())))
+    #             splits = generate_lock_split(all_keys_sorted, seed=12345, n_splits=5)
+    #             save_json(splits, splits_file)
+    #
+    #         else:
+    #             self.print_to_log_file("Using splits from existing split file:", splits_file)
+    #             splits = load_json(splits_file)
+    #             self.print_to_log_file(f"The split file contains {len(splits)} splits.")
+    #
+    #         self.print_to_log_file("Desired fold for training: %d" % self.fold)
+    #         if self.fold < len(splits):
+    #             tr_keys = splits[self.fold]['train']
+    #             val_keys = splits[self.fold]['val']
+    #             self.print_to_log_file("This split has %d training and %d validation cases."
+    #                                    % (len(tr_keys), len(val_keys)))
+    #         else:
+    #             self.print_to_log_file("INFO: You requested fold %d for training but splits "
+    #                                    "contain only %d folds. I am now creating a "
+    #                                    "random (but seeded) 80:20 split!" % (self.fold, len(splits)))
+    #             # if we request a fold that is not in the split file, create a random 80:20 split
+    #             rnd = np.random.RandomState(seed=12345 + self.fold)
+    #             keys = np.sort(list(dataset.keys()))
+    #             idx_tr = rnd.choice(len(keys), int(len(keys) * 0.8), replace=False)
+    #             idx_val = [i for i in range(len(keys)) if i not in idx_tr]
+    #             tr_keys = [keys[i] for i in idx_tr]
+    #             val_keys = [keys[i] for i in idx_val]
+    #             self.print_to_log_file("This random 80:20 split has %d training and %d validation cases."
+    #                                    % (len(tr_keys), len(val_keys)))
+    #         if any([i in val_keys for i in tr_keys]):
+    #             self.print_to_log_file('WARNING: Some validation cases are also in the training set. Please check the '
+    #                                    'splits.json or ignore if this is intentional.')
+    #     return tr_keys, val_keys
 
     # @staticmethod
     # def get_training_transforms(
@@ -151,34 +206,6 @@ class HTTrainer(nnUNetTrainer):
     #     transforms.append(
     #         RemoveLabelTansform(-1, 0)
     #     )
-    #     if is_cascaded:
-    #         assert foreground_labels is not None, 'We need foreground_labels for cascade augmentations'
-    #         transforms.append(
-    #             MoveSegAsOneHotToDataTransform(
-    #                 source_channel_idx=1,
-    #                 all_labels=foreground_labels,
-    #                 remove_channel_from_source=True
-    #             )
-    #         )
-    #         transforms.append(
-    #             RandomTransform(
-    #                 ApplyRandomBinaryOperatorTransform(
-    #                     channel_idx=list(range(-len(foreground_labels), 0)),
-    #                     strel_size=(1, 8),
-    #                     p_per_label=1
-    #                 ), apply_probability=0.4
-    #             )
-    #         )
-    #         transforms.append(
-    #             RandomTransform(
-    #                 RemoveRandomConnectedComponentFromOneHotEncodingTransform(
-    #                     channel_idx=list(range(-len(foreground_labels), 0)),
-    #                     fill_with_other_class_p=0,
-    #                     dont_do_if_covers_more_than_x_percent=0.15,
-    #                     p_per_label=1
-    #                 ), apply_probability=0.2
-    #             )
-    #         )
     #
     #     if regions is not None:
     #         # the ignore label must also be converted
@@ -202,6 +229,7 @@ class HTTrainer(nnUNetTrainer):
                                    num_output_channels: int,
                                    enable_deep_supervision: bool,
                                    invalid_args: list[str] = None,
+                                   n_stages: Optional[int] = None,
                                    print_args: bool = False) -> dict:
         """
         构建模型的通用部分。
@@ -221,6 +249,14 @@ class HTTrainer(nnUNetTrainer):
         if invalid_args:
             for i in invalid_args:
                 architecture_kwargs.pop(i)
+
+        if n_stages:
+            architecture_kwargs['n_stages'] = n_stages
+            architecture_kwargs['features_per_stage'] = architecture_kwargs['features_per_stage'][:n_stages]
+            architecture_kwargs['kernel_sizes'] = architecture_kwargs['kernel_sizes'][:n_stages]
+            architecture_kwargs['strides'] = architecture_kwargs['strides'][:n_stages]
+            architecture_kwargs['n_conv_per_stage'] = architecture_kwargs['n_conv_per_stage'][:n_stages]
+            architecture_kwargs['n_conv_per_stage_decoder'] = architecture_kwargs['n_conv_per_stage_decoder'][:n_stages - 1]
 
         if config.drop_out_rate:
             architecture_kwargs['dropout_op'] = get_matching_dropout(dimension=3)

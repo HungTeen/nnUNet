@@ -4,7 +4,9 @@ import torch
 from dynamic_network_architectures.architectures.unet import PlainConvUNet
 from torch import nn
 
+from pangteen.network.ptnet.nnunet import nnUNet
 from pangteen.network.ptnet.ptunet import PangTeenUNet
+from pangteen.network.ptnet.sfunet import SFUNet
 from pangteen.trainer.trainers import HTTrainer
 
 
@@ -37,10 +39,7 @@ class UNetTrainer(HTTrainer):
         return network
 
 
-class PTUNetTrainer(HTTrainer):
-    """
-    CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 201 3d_fullres 3 -p default -tr PTUNetTrainer -num_gpus 1 > main.out 2>&1 &
-    """
+class NNUNetTrainer(HTTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
@@ -58,7 +57,7 @@ class PTUNetTrainer(HTTrainer):
                                                             enable_deep_supervision,
                                                             print_args=True)
 
-        network = PangTeenUNet(**architecture_kwargs)
+        network = nnUNet(**architecture_kwargs)
 
         if hasattr(network, 'initialize'):
             network.apply(network.initialize)
@@ -67,9 +66,6 @@ class PTUNetTrainer(HTTrainer):
 
 
 class SmallUNetTrainer(HTTrainer):
-    """
-    CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 201 3d_fullres 3 -p default -tr SmallUNetTrainer -num_gpus 1 > main.out 2>&1 &
-    """
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):

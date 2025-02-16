@@ -57,6 +57,7 @@ dependencies = [
     "causal_conv1d",
     "monai",
     "mamba_ssm",
+    "timm",
     # blosc2
 ]
 
