@@ -36,7 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('--npz', action='store_true', required=False,
                         help='[OPTIONAL] Save softmax predictions from final validation as npz files (in addition to predicted '
                              'segmentations). Needed for finding the best ensemble.')
-    parser.add_argument('--c', action='store_true', required=False,
+    parser.add_argument('--continue_train', action='store_true', required=False,
                         help='[OPTIONAL] Continue training from latest checkpoint')
     parser.add_argument('--val', action='store_true', required=False,
                         help='[OPTIONAL] Set this flag to only run the validation. Requires training to have finished.')
@@ -71,6 +71,6 @@ if __name__ == '__main__':
         device = torch.device('mps')
 
     run_training(args.d, args.c, args.f, args.tr, args.p, args.pretrained_weights,
-                 args.num_gpus, args.use_compressed, args.npz, args.c, args.val, args.disable_checkpointing,
+                 args.num_gpus, args.use_compressed, args.npz, args.continue_train, args.val, args.disable_checkpointing,
                  args.val_best,
                  device=device)

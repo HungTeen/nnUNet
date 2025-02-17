@@ -8,8 +8,9 @@ from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
 
 from pangteen.network.common.helper import get_matching_pool_op, get_matching_convtransp
+from pangteen.network.ptnet.norm_blocks import LayerNorm
 from pangteen.network.unet.block import StackedConvBlocks
-
+from timm.models.layers import trunc_normal_, DropPath
 
 class BasicConvBlock(nn.Module):
     """
@@ -286,3 +287,40 @@ class GSC(nn.Module):
         x = self.proj4(x)
 
         return x + x_residual
+
+
+class UXConvBlock(nn.Module):
+
+    def __init__(self, channels: int,
+                 conv_op: Type[_ConvNd],
+                 conv_group: int = 1,
+                 drop_path=0.,
+                 layer_scale_init_value=1e-6):
+        super(UXConvBlock, self).__init__()
+        self.dwconv = BasicConvBlock(channels, channels, conv_op, 7, conv_group=channels)
+        self.norm = LayerNorm(channels, eps=1e-6)
+        # self.pwconv1 = nn.Linear(dim, 4 * dim)
+        self.pwconv1 = nn.Conv3d(channels, 4 * channels, kernel_size=1, groups=channels)
+        self.act = nn.GELU()
+        # self.pwconv2 = nn.Linear(4 * dim, dim)
+        self.pwconv2 = nn.Conv3d(4 * channels, channels, kernel_size=1, groups=channels)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((channels)),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+    def forward(self, x):
+        input = x
+        x = self.dwconv(x)
+        x = x.permute(0, 2, 3, 4, 1)  # (N, C, H, W, D) -> (N, H, W, D, C)
+        x = self.norm(x)
+        x = x.permute(0, 4, 1, 2, 3)  # (N, H, W, D, C) -> (N, C, H, W, D)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        x = x.permute(0, 2, 3, 4, 1)  # (N, C, H, W, D) -> (N, H, W, D, C)
+        if self.gamma is not None:
+            x = self.gamma * x
+
+        x = x.permute(0, 4, 1, 2, 3)  # (N, H, W, D, C) -> (N, C, H, W, D)
+        x = input + self.drop_path(x)
+        return x

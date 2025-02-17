@@ -27,6 +27,7 @@ class PangTeenNet(nn.Module):
                  enable_skip_layer: bool = True,
                  skip_merge_type: Optional[str] = 'concat',  # 可以是'concat'或者'add'或者None。
                  deep_supervision: bool = False,
+                 down_sample_first: bool = True,
                  **invalid_args
                  ):
         """
@@ -41,6 +42,7 @@ class PangTeenNet(nn.Module):
         self.enable_skip_layer = enable_skip_layer
         self.skip_merge_type = skip_merge_type
         self.deep_supervision = deep_supervision
+        self.down_sample_first = down_sample_first
 
         # 编码器层，一共有n_stages-1个编码器层。
         self.encoder_layers = nn.ModuleList()
@@ -60,35 +62,76 @@ class PangTeenNet(nn.Module):
         self.skip_merge_blocks = nn.ModuleList()
 
 
+    # def forward(self, x):
+    #     skips = []
+    #     for i, encoder_layer in enumerate(self.encoder_layers):
+    #         x = encoder_layer(x)
+    #         t = x
+    #         x = self.down_sample_blocks[i](x)
+    #         if self.enable_skip_layer and len(self.skip_layers) > i and self.skip_layers[i] is not None:
+    #             t = self.skip_layers[i](t)
+    #
+    #         skips.append(t)
+    #
+    #     x = self.bottle_neck(x)
+    #     # for i, skip in enumerate(skips):
+    #     #     print("skip {}: {}".format(i, skip.size()))
+    #
+    #     seg_outputs = []
+    #     for i in range(1, self.n_stages):
+    #         x = self.up_sample_blocks[-i](x)
+    #
+    #         if self.enable_skip_layer:
+    #             if self.skip_merge_type is None:
+    #                 x = self.skip_merge_blocks[- i](x, skips[- i])
+    #             elif self.skip_merge_type == 'concat':
+    #                 x = torch.cat([x, skips[- i]], dim=1)
+    #             elif self.skip_merge_type == 'add':
+    #                 x = x + skips[- i]
+    #             else:
+    #                 raise ValueError("skip_merge_type should be 'concat' or 'add'")
+    #
+    #         x = self.decoder_layers[-i](x)
+    #         if self.deep_supervision:
+    #             seg_outputs.append(self.seg_layers[- i](x))
+    #
+    #     if not self.deep_supervision:
+    #         seg_outputs.append(self.seg_layers[0](x))
+    #
+    #     seg_outputs = seg_outputs[::-1]
+    #     if self.deep_supervision:
+    #         return seg_outputs
+    #     else:
+    #         return seg_outputs[-1]
+
     def forward(self, x):
         skips = []
         for i, encoder_layer in enumerate(self.encoder_layers):
-            x = encoder_layer(x)
+            if self.down_sample_first:
+                x = self.down_sample_blocks[i](x)
+                x = encoder_layer(x)
+            else:
+                x = encoder_layer(x)
+                x = self.down_sample_blocks[i](x)
             t = x
-            x = self.down_sample_blocks[i](x)
-            if self.enable_skip_layer and len(self.skip_layers) > i and self.skip_layers[i] is not None:
-                t = self.skip_layers[i](t)
+            # 降采样之后才会有 skip！并且瓶颈层没有 skip！
+            if i < self.n_stages - 1:
+                if self.enable_skip_layer and len(self.skip_layers) > i and self.skip_layers[i] is not None:
+                    t = self.skip_layers[i](t)
+                skips.append(t)
 
-            skips.append(t)
+        if self.bottle_neck is not None:
+            x = self.bottle_neck(x)
 
-        x = self.bottle_neck(x)
         # for i, skip in enumerate(skips):
         #     print("skip {}: {}".format(i, skip.size()))
 
         seg_outputs = []
         for i in range(1, self.n_stages):
+            # print(x.size())
             x = self.up_sample_blocks[-i](x)
-
-            if self.enable_skip_layer:
-                if self.skip_merge_type is None:
-                    x = self.skip_merge_blocks[- i](x, skips[- i])
-                elif self.skip_merge_type == 'concat':
-                    x = torch.cat([x, skips[- i]], dim=1)
-                elif self.skip_merge_type == 'add':
-                    x = x + skips[- i]
-                else:
-                    raise ValueError("skip_merge_type should be 'concat' or 'add'")
-
+            # print(x.size())
+            x = self.connect_skip(i, x, skips[-i])
             x = self.decoder_layers[-i](x)
             if self.deep_supervision:
                 seg_outputs.append(self.seg_layers[- i](x))

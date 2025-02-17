@@ -155,3 +155,6 @@ def unwrap_extension(name, ext):
 
 def append_name(filename, name):
     return wrap_niigz(unwrap_niigz(filename) + name)
+
+def append_png_name(filename, name):
+    return wrap_png(unwrap_png(filename) + name)

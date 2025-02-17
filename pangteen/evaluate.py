@@ -16,7 +16,7 @@ COMMON_METRICS = {
     "Dice": m.dice,  # 重叠率，越大越好。
     "IOU": m.jaccard,  # 交并比，另一种重叠率，越大越好（IOU）。
     # "HD": m.hausdorff_distance,  # 豪斯多夫距离，越小越好。Dice对mask的内部填充比较敏感，而hausdorff distance 对分割出的边界比较敏感。
-    # "HD95": m.hausdorff_distance_95,  # 豪斯多夫距离去掉最大的一些值，越小越好。
+    "HD95": m.hausdorff_distance_95,  # 豪斯多夫距离去掉最大的一些值，越小越好。
     "Precision": m.precision,  # 精确率，越大越好。
     "Recall": m.recall,  # 查全率，越大越好。
     # "ASSD": m.avg_surface_distance_symmetric,  # 双边平均距离，越小越好。
@@ -58,7 +58,7 @@ def get_worst_val(name):
 
 class MetricManager:
 
-    def __init__(self, result_folder, task_config: config.BaseConfig, val=False, train=False):
+    def __init__(self, result_folder, task_config: config.BaseConfig, val=False, train=False, trainer=None):
         """
         Args:
             result_folder: 预测结果文件夹。
@@ -68,6 +68,7 @@ class MetricManager:
         self.task_config = task_config
         self.val = val
         self.train = train
+        self.trainer = trainer
         self.label_map = {}
         for k, v in task_config.label_map.items():
             self.label_map[v] = k  # 标签名字 -> 标签值。
@@ -134,8 +135,10 @@ class MetricManager:
 
                 self.summary_table_data[i, j] = round(self.summary_table_data[i, j], 4)
                 print("Table data for row : {}; col : {} is {}".format(label, metric, self.summary_table_data[i, j]))
-
-        table_writer = pd.ExcelWriter('evaluate_val_data.xlsx' if self.val else 'evaluate_test_data.xlsx' if not self.train else 'evaluate_train_data.xlsx')
+        table_name = 'evaluate_val_data.xlsx' if self.val else 'evaluate_test_data.xlsx' if not self.train else 'evaluate_train_data.xlsx'
+        if self.trainer:
+            table_name = self.trainer + '_' + table_name
+        table_writer = pd.ExcelWriter(table_name)
         table = pd.DataFrame(data=self.summary_table_data, index=self.summary_row_titles, columns=self.summary_col_titles)
         table.to_excel(table_writer, sheet_name='Summary')
 
@@ -233,7 +236,7 @@ def main():
 
     task_config = utils.get_task_config(args.t)
 
-    manager = MetricManager(result_folder=result_folder, task_config=task_config, val=args.evaluate_val, train=args.evaluate_train)
+    manager = MetricManager(result_folder=result_folder, task_config=task_config, val=args.evaluate_val, train=args.evaluate_train, trainer=args.tr)
     manager.evaluate()
 
 

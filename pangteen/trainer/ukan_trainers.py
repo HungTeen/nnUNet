@@ -3,7 +3,7 @@ from typing import Union, List, Tuple
 import torch
 from torch import nn
 
-from pangteen.network.ptnet.ptukan import UKAN_3D
+from pangteen.network.ptnet.ptukan import UKAN_3D, SFUKAN_3D
 from pangteen.network.ukan.ukan_2d import UKAN
 from pangteen.trainer.trainers import HTTrainer
 
@@ -16,6 +16,7 @@ class UKanTrainer(HTTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
+        self.num_epochs = 500
         self.initial_lr = 1e-2
         self.enable_deep_supervision = False
 
@@ -33,6 +34,9 @@ class UKanTrainer(HTTrainer):
                                                             print_args=True)
 
         network = UKAN_3D(
+            encode_kan_num=2,
+            decode_kan_num=2,
+            reverse_kan_order=True,
             **architecture_kwargs
         )
 
@@ -42,10 +46,7 @@ class UKanTrainer(HTTrainer):
         return network
 
 
-class SmallUKanTrainer(UKanTrainer):
-    """
-    CUDA_VISIBLE_DEVICES=2 nohup python -u pangteen/train.py 201 3d_fullres 3 -p stage5Plans -tr UKanTrainer -num_gpus 1 > main0.out 2>&1 &
-    """
+class SFUKanTrainer(UKanTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
@@ -65,7 +66,10 @@ class SmallUKanTrainer(UKanTrainer):
                                                             n_stages=5
                                                             )
 
-        network = UKAN_3D(
+        network = SFUKAN_3D(
+            encode_kan_num=2,
+            decode_kan_num=2,
+            reverse_kan_order=True,
             embed_dims=[32, 64, 128, 256, 512],
             **architecture_kwargs
         )
