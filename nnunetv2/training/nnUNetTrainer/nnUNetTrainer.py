@@ -203,11 +203,25 @@ class nnUNetTrainer(object):
                                "#######################################################################\n",
                                also_print_to_console=True, add_timestamp=False)
 
+    def only_initialize_network(self, architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True):
+        self.network = self.build_network_architecture(
+            architecture_class_name,
+            arch_init_kwargs,
+            arch_init_kwargs_req_import,
+            num_input_channels,
+            num_output_channels,
+            enable_deep_supervision
+        ).to(self.device)
+
     def initialize(self):
         if not self.was_initialized:
             self.num_input_channels = determine_num_input_channels(self.plans_manager, self.configuration_manager,
                                                                    self.dataset_json)
-
             self.network = self.build_network_architecture(
                 self.configuration_manager.network_arch_class_name,
                 self.configuration_manager.network_arch_init_kwargs,
@@ -1183,11 +1197,13 @@ class nnUNetTrainer(object):
                 self.print_to_log_file('No checkpoint written, checkpointing is disabled')
 
     def load_checkpoint(self, filename_or_checkpoint: Union[dict, str]) -> None:
+        print(filename_or_checkpoint)
         if not self.was_initialized:
             self.initialize()
 
         if isinstance(filename_or_checkpoint, str):
-            checkpoint = torch.load(filename_or_checkpoint, map_location=self.device)
+            # load from file
+            checkpoint = torch.load(filename_or_checkpoint, map_location=self.device, weights_only=False)
         # if state dict comes from nn.DataParallel but we use non-parallel model here then the state dict keys do not
         # match. Use heuristic to make it match
         new_state_dict = {}
