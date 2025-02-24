@@ -9,7 +9,7 @@ from nnunetv2.run.run_training import maybe_load_best_checkpoint
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.utilities.helpers import empty_cache, dummy_context
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
-from pangteen.loss.ds_loss import UncertaintyTeacherKDForSequenceClassification, KDLoss
+from pangteen.loss.ds_loss import KDLoss
 
 
 class KDTrainer(nnUNetTrainer):

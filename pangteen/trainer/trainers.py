@@ -34,6 +34,7 @@ from nnunetv2.training.dataloading.utils import get_case_identifiers
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.utilities.crossval_split import generate_lock_split
 from pangteen import config
+from pangteen.network import cfg
 from pangteen.network.common.helper import get_matching_dropout
 
 
@@ -251,12 +252,7 @@ class HTTrainer(nnUNetTrainer):
                 architecture_kwargs.pop(i)
 
         if n_stages:
-            architecture_kwargs['n_stages'] = n_stages
-            architecture_kwargs['features_per_stage'] = architecture_kwargs['features_per_stage'][:n_stages]
-            architecture_kwargs['kernel_sizes'] = architecture_kwargs['kernel_sizes'][:n_stages]
-            architecture_kwargs['strides'] = architecture_kwargs['strides'][:n_stages]
-            architecture_kwargs['n_conv_per_stage'] = architecture_kwargs['n_conv_per_stage'][:n_stages]
-            architecture_kwargs['n_conv_per_stage_decoder'] = architecture_kwargs['n_conv_per_stage_decoder'][:n_stages - 1]
+            architecture_kwargs = cfg.cut_stage(architecture_kwargs, n_stages)
 
         if config.drop_out_rate:
             architecture_kwargs['dropout_op'] = get_matching_dropout(dimension=3)

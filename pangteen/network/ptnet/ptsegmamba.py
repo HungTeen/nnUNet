@@ -11,18 +11,15 @@
 
 from __future__ import annotations
 
-from typing import Sequence
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mamba_ssm import Mamba
-from monai.networks.blocks.dynunet_block import UnetOutBlock, UnetResBlock, get_conv_layer
-from monai.networks.blocks.unetr_block import UnetrBasicBlock
+from monai.networks.blocks.dynunet_block import UnetOutBlock
+from monai.networks.blocks.unetr_block import UnetrBasicBlock, UnetrUpBlock
 
 from pangteen.network import cfg
 from pangteen.network.network_analyzer import NetworkAnalyzer
-from pangteen.network.ptnet.fushion_blocks import SelectiveFusionBlock
 
 
 class LayerNorm(nn.Module):
@@ -52,75 +49,6 @@ class LayerNorm(nn.Module):
             x = self.weight[:, None, None, None] * x + self.bias[:, None, None, None]
 
             return x
-
-class UnetrUpBlock(nn.Module):
-    """
-    An upsampling module that can be used for UNETR: "Hatamizadeh et al.,
-    UNETR: Transformers for 3D Medical Image Segmentation <https://arxiv.org/abs/2103.10504>"
-    """
-
-    def __init__(
-        self,
-        spatial_dims: int,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: Sequence[int] | int,
-        upsample_kernel_size: Sequence[int] | int,
-        norm_name: tuple | str,
-        res_block: bool = False,
-    ) -> None:
-        """
-        Args:
-            spatial_dims: number of spatial dimensions.
-            in_channels: number of input channels.
-            out_channels: number of output channels.
-            kernel_size: convolution kernel size.
-            upsample_kernel_size: convolution kernel size for transposed convolution layers.
-            norm_name: feature normalization type and arguments.
-            res_block: bool argument to determine if residual block is used.
-
-        """
-
-        super().__init__()
-        upsample_stride = upsample_kernel_size
-        self.transp_conv = get_conv_layer(
-            spatial_dims,
-            in_channels,
-            out_channels,
-            kernel_size=upsample_kernel_size,
-            stride=upsample_stride,
-            conv_only=True,
-            is_transposed=True,
-        )
-
-        if res_block:
-            self.conv_block = UnetResBlock(
-                spatial_dims,
-                out_channels,
-                out_channels,
-                kernel_size=kernel_size,
-                stride=1,
-                norm_name=norm_name,
-            )
-        else:
-            self.conv_block = UnetBasicBlock(  # type: ignore
-                spatial_dims,
-                out_channels,
-                out_channels,
-                kernel_size=kernel_size,
-                stride=1,
-                norm_name=norm_name,
-            )
-
-        self.sf_block = SelectiveFusionBlock(out_channels, nn.Conv3d, 'mlp')
-
-    def forward(self, inp, skip):
-        # number of channels for skip should equals to out_channels
-        out = self.transp_conv(inp)
-        # out = torch.cat((out, skip), dim=1)
-        out = self.sf_block(out, skip)
-        out = self.conv_block(out)
-        return out
 
 
 class MambaLayer(nn.Module):
@@ -272,7 +200,7 @@ class MambaEncoder(nn.Module):
         return x
 
 
-class SegMamba(nn.Module):
+class SFSegMamba(nn.Module):
     """
     Reference: https://github.com/ge-xing/SegMamba
     """
@@ -428,7 +356,7 @@ class SegMamba(nn.Module):
         return self.out(out)
 
 if __name__ == "__main__":
-    network = SegMamba(
+    network = SFSegMamba(
         depths=[2, 2, 2, 2],
         **cfg.default_network_args
     ).cuda()

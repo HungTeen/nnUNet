@@ -123,14 +123,9 @@ class PangTeenNet(nn.Module):
         if self.bottle_neck is not None:
             x = self.bottle_neck(x)
 
-        # for i, skip in enumerate(skips):
-        #     print("skip {}: {}".format(i, skip.size()))
-
         seg_outputs = []
         for i in range(1, self.n_stages):
-            # print(x.size())
             x = self.up_sample_blocks[-i](x)
-            # print(x.size())
             x = self.connect_skip(i, x, skips[-i])
             x = self.decoder_layers[-i](x)
             if self.deep_supervision:

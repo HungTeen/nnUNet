@@ -58,6 +58,8 @@ dependencies = [
     "monai",
     "mamba_ssm",
     "timm",
+    "numpy-hilbert-curve",
+    "pyzorder",
     # blosc2
 ]
 

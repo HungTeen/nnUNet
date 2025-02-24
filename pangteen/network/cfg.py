@@ -1,0 +1,36 @@
+from torch import nn
+
+from pangteen.network.common import helper
+
+default_network_args = {
+    'input_channels': 1,
+    'n_stages': 6,
+    'features_per_stage': [32, 64, 128, 256, 320, 320],
+    'conv_op': nn.Conv3d,
+    'kernel_sizes': [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
+    'strides': [[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]],
+    'n_conv_per_stage': [2, 2, 2, 2, 2, 2],
+    'num_classes': 3,
+    'n_conv_per_stage_decoder': [2, 2, 2, 2, 2],
+    'conv_bias': True,
+    'norm_op': helper.get_matching_instancenorm(dimension=3),
+    'nonlin': nn.LeakyReLU,
+    'nonlin_kwargs': {'negative_slope': 1e-2, 'inplace': True},
+    'deep_supervision': True,
+}
+
+
+def cut_stage(args, n_stages):
+    # 复制一份参数，然后修改 n_stages 的值。
+    network_args = args.copy()
+    network_args['n_stages'] = n_stages
+    network_args['features_per_stage'] = network_args['features_per_stage'][:n_stages]
+    network_args['kernel_sizes'] = network_args['kernel_sizes'][:n_stages]
+    network_args['strides'] = network_args['strides'][:n_stages]
+    network_args['n_conv_per_stage'] = network_args['n_conv_per_stage'][:n_stages]
+    network_args['n_conv_per_stage_decoder'] = network_args['n_conv_per_stage_decoder'][:n_stages - 1]
+    return network_args
+
+
+stage5_network_args = cut_stage(default_network_args, 5)
+stage4_network_args = cut_stage(default_network_args, 4)

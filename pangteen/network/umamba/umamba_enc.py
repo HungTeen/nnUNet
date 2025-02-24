@@ -174,12 +174,12 @@ class ResidualMambaEncoder(nn.Module):
 
         do_channel_token = [False] * n_stages
         feature_map_sizes = []
-        feature_map_size = input_size
-        for s in range(n_stages):
-            feature_map_sizes.append([i // j for i, j in zip(feature_map_size, strides[s])])
-            feature_map_size = feature_map_sizes[-1]
-            if np.prod(feature_map_size) <= features_per_stage[s]:
-                do_channel_token[s] = True
+        # feature_map_size = input_size
+        # for s in range(n_stages):
+        #     feature_map_sizes.append([i // j for i, j in zip(feature_map_size, strides[s])])
+        #     feature_map_size = feature_map_sizes[-1]
+        #     if np.prod(feature_map_size) <= features_per_stage[s]:
+        #         do_channel_token[s] = True
 
         print(f"feature_map_sizes: {feature_map_sizes}")
         print(f"do_channel_token: {do_channel_token}")
@@ -543,3 +543,33 @@ def get_umamba_enc_3d_from_plans(
     model.apply(InitWeights_He(1e-2))
 
     return model
+
+if __name__ == "__main__":
+    network = UMambaEnc(
+        input_size=(96, 160, 160),
+        input_channels=1,
+        n_stages=6,
+        features_per_stage= [32, 64, 128, 256, 320, 320],
+        # features_per_stage= [16, 32, 64, 128, 256, 512],
+        conv_op= nn.Conv3d,
+        kernel_sizes = [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
+        strides = [[1, 1, 1], [1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
+        n_conv_per_stage=[2, 2, 2, 2, 2, 2],
+        num_classes=2,
+        n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
+        conv_bias= True,
+        deep_supervision=True,
+    ).cuda()
+
+    x = torch.zeros((2, 1, 96, 160, 160), requires_grad=False).cuda()
+
+    with torch.autocast(device_type='cuda', enabled=True):
+        print(x.device)
+        pred = network(x)
+        for y in pred:
+            print(y.size())
+
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(count_parameters(network))

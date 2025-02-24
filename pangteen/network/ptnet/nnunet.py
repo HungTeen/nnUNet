@@ -67,7 +67,7 @@ class nnUNet(PangTeenNet):
                 conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs, pool
             ))
             self.encoder_layers.append(MultiBasicConvBlock(
-                n_conv_per_stage[s] - 1, input_channels, features_per_stage[s],
+                n_conv_per_stage[s], input_channels, features_per_stage[s],
                 conv_op, kernel_sizes[s], 1, 1, conv_bias,
                 norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs
             ))

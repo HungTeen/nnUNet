@@ -64,7 +64,6 @@ class ChannelAttentionBlock(nn.Module):
             self.grn_beta = nn.Parameter(torch.zeros(1, exp_r * in_channels, 1, 1, 1), requires_grad=True)
             self.grn_gamma = nn.Parameter(torch.zeros(1, exp_r * in_channels, 1, 1, 1), requires_grad=True)
 
-
     def forward(self, x):
         x1 = x
         x1 = self.conv1(x1)
@@ -87,12 +86,12 @@ class SpatialAttentionBlock(nn.Module):
     """
 
     def __init__(self,
-                 channels : int,
+                 channels: int,
                  conv_op: Type[_ConvNd],
                  dim: int = 3,
                  spatial_len: List[int] = [7, 11, 21],
                  channelAttention_reduce=4
-        ):
+                 ):
         super().__init__()
 
         self.attention_conv = BasicConvBlock(
@@ -132,3 +131,68 @@ class SpatialAttentionBlock(nn.Module):
         # out = spatial_att * inputs
         # out = self.conv(out)
         return x
+
+
+class Spatial_Att_Bridge(nn.Module):
+    """
+    SAB Block
+    """
+    def __init__(self, shared_conv2d):
+        super().__init__()
+        self.shared_conv2d = shared_conv2d
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        att = torch.cat([avg_out, max_out], dim=1)
+        att = self.shared_conv2d(att)
+        att *= x
+        x = x + att
+        return x
+
+
+class Channel_Att_Bridge(nn.Module):
+    """
+    CAB Block
+    """
+    def __init__(self, c_list, split_att='fc'):
+        super().__init__()
+        c_list_sum = sum(c_list) - c_list[-1]
+        self.split_att = split_att
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.get_all_att = nn.Conv1d(1, 1, kernel_size=3, padding=1, bias=False)
+        self.att1 = nn.Linear(c_list_sum, c_list[0]) if split_att == 'fc' else nn.Conv1d(c_list_sum, c_list[0], 1)
+        self.att2 = nn.Linear(c_list_sum, c_list[1]) if split_att == 'fc' else nn.Conv1d(c_list_sum, c_list[1], 1)
+        self.att3 = nn.Linear(c_list_sum, c_list[2]) if split_att == 'fc' else nn.Conv1d(c_list_sum, c_list[2], 1)
+        self.att4 = nn.Linear(c_list_sum, c_list[3]) if split_att == 'fc' else nn.Conv1d(c_list_sum, c_list[3], 1)
+        self.att5 = nn.Linear(c_list_sum, c_list[4]) if split_att == 'fc' else nn.Conv1d(c_list_sum, c_list[4], 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, t1, t2, t3, t4, t5):
+        att = torch.cat((self.avgpool(t1),
+                         self.avgpool(t2),
+                         self.avgpool(t3),
+                         self.avgpool(t4),
+                         self.avgpool(t5)), dim=1)
+        att = self.get_all_att(att.squeeze(-1).transpose(-1, -2))
+        if self.split_att != 'fc':
+            att = att.transpose(-1, -2)
+        att1 = self.sigmoid(self.att1(att))
+        att2 = self.sigmoid(self.att2(att))
+        att3 = self.sigmoid(self.att3(att))
+        att4 = self.sigmoid(self.att4(att))
+        att5 = self.sigmoid(self.att5(att))
+        if self.split_att == 'fc':
+            att1 = att1.transpose(-1, -2).unsqueeze(-1).expand_as(t1)
+            att2 = att2.transpose(-1, -2).unsqueeze(-1).expand_as(t2)
+            att3 = att3.transpose(-1, -2).unsqueeze(-1).expand_as(t3)
+            att4 = att4.transpose(-1, -2).unsqueeze(-1).expand_as(t4)
+            att5 = att5.transpose(-1, -2).unsqueeze(-1).expand_as(t5)
+        else:
+            att1 = att1.unsqueeze(-1).expand_as(t1)
+            att2 = att2.unsqueeze(-1).expand_as(t2)
+            att3 = att3.unsqueeze(-1).expand_as(t3)
+            att4 = att4.unsqueeze(-1).expand_as(t4)
+            att5 = att5.unsqueeze(-1).expand_as(t5)
+
+        return att1, att2, att3, att4, att5
