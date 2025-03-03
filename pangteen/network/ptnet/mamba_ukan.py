@@ -10,7 +10,7 @@ from pangteen.network.common import helper
 from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.ptnet.conv_blocks import MultiBasicConvBlock, BasicConvBlock, UpSampleBlock, GSC, DownSampleBlock, \
     UXConvBlock
-from pangteen.network.ptnet.fushion_blocks import SelectiveFusionBlock
+from pangteen.network.ptnet.fushion_blocks import SelectiveFusionBlock, MultiScaleFusionBlock
 from pangteen.network.ptnet.mamba_blocks import MambaLayer
 from pangteen.network.ptnet.nnunet import nnUNet
 from pangteen.network.ptnet.ptnet import PangTeenNet
@@ -43,22 +43,24 @@ class MambaUKan(PangTeenNet):
                  nonlin_kwargs: dict = None,
                  skip_merge_type='add',
                  deep_supervision: bool = False,
-                 encoder_types: list = ['Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
-                 decoder_types: list = ['Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
+                 encoder_types: list = ['Conv', 'Conv', 'Conv', 'Conv', 'Conv', 'Conv'],
+                 decoder_types: list = ['Conv', 'Conv', 'Conv', 'Conv', 'Conv', 'Conv'],
                  spatial_dim: int = 3,
-                 feature_channels=[32, 64, 128, 256, 512],
+                 feature_channels=[32, 64, 128, 256, 320, 320],
                  res_path_count: Optional[List] = None, #[4, 3, 2, 1],
                  no_kan=False,
                  drop_rate=0.,
                  drop_path_rate=0.,
                  norm_layer=nn.LayerNorm,
-                 block_depths=[1, 1, 1, 1, 1, 1],
+                 block_depths=1,
                  select_fusion=False,
                  pool: str = 'conv',
                  use_mambav2=False,
                  down_sample_first=False,
                  patch_size=(128, 128, 128),
-                 proj_size=[64, 64, 64, 32, 32],
+                 proj_size=[64, 64, 64, 32, 32, 32],
+                 upsample_last=False,
+                 skip_fusion=False,
                  **invalid_args,
                  ):
         """
@@ -82,6 +84,8 @@ class MambaUKan(PangTeenNet):
         self.decoder_types = decoder_types
         if isinstance(block_depths, int):
             block_depths = [block_depths] * n_stages
+        feature_channels = feature_channels[:n_stages]
+        proj_size = proj_size[:n_stages]
         assert len(encoder_types) == n_stages, "The number of encoder_types and n_stages must be the same."
         assert len(decoder_types) == n_stages, "The number of decoder_types and n_stages must be the same."
         assert len(block_depths) == n_stages, "The number of block_depths and n_stages must be the same."
@@ -124,7 +128,7 @@ class MambaUKan(PangTeenNet):
                 self.encoder_layers.append(nn.Sequential(*[
                     GSC(feature_channels[s]),
                     *[MambaLayer(feature_channels[s], channel_token=False, use_v2=use_mambav2) for _ in
-                      range(mamba_count)]
+                      range(block_depths[s])]
                 ]))
                 self.down_sample_blocks.append(DownSampleBlock(
                     conv_op, in_chans, feature_channels[s], kernel_sizes[s], strides[s],
@@ -231,12 +235,28 @@ class MambaUKan(PangTeenNet):
             else:
                 raise ValueError(f"Unknown encoder type: {encoder_types[s]}")
 
-            self.seg_layers.append(nn.Sequential(*[
-                BasicConvBlock(
-                    input_channels=feature_channels[s], output_channels=num_classes,
-                    conv_op=conv_op, kernel_size=1, stride=1,
-                ),
-            ]))
+            if upsample_last:
+                self.seg_layers.append(nn.Sequential(*[
+                    UpSampleBlock(
+                        conv_op, feature_channels[s], feature_channels[s], (2, 2, 2), conv_bias
+                    ),
+                    BasicConvBlock(
+                        input_channels=feature_channels[s], output_channels=num_classes,
+                        conv_op=conv_op, kernel_size=1, stride=1,
+                    ),
+                ]))
+            else:
+                self.seg_layers.append(nn.Sequential(*[
+                    BasicConvBlock(
+                        input_channels=feature_channels[s], output_channels=num_classes,
+                        conv_op=conv_op, kernel_size=1, stride=1,
+                    ),
+                ]))
+
+            if skip_fusion:
+                self.skip_fusion_block = MultiScaleFusionBlock(
+                    feature_channels[:-1], conv_op, norm_op, norm_op_kwargs, nonlin, nonlin_kwargs, norm_layer, drop_rate, use_mamba_v2=use_mambav2
+                )
 
         self.bottle_neck = None
 

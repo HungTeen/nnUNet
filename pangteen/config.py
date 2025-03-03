@@ -7,6 +7,7 @@ from pangteen.renal import setting
 
 # 参数设置。
 max_cpu_cnt = 6
+max_thread_cnt = 10
 drop_out_rate = None # 控制 nnUNet 各个卷积层是否使用 dropout。
 
 # 文件夹相关。
@@ -32,6 +33,7 @@ class BaseConfig:
         self.label_map = label_map
         self.folder_name = folder_name if folder_name else task_name
         self.base_folder = join(my_folder, self.folder_name)  # 项目数据的根路径。
+        self.black_list = []
         config_list.append(self)
 
     def get_label_path(self, image_filename):
@@ -104,7 +106,7 @@ class LiTSConfig(BaseConfig):
         self.label_folder = join(self.base_folder, 'liver_label')
         self.cut_image_folder = join(self.base_folder, 'cut_liver_image')
         self.cut_label_folder = join(self.base_folder, 'cut_liver_label')
-
+        self.black_list = [34, 39, 41, 74]
 
     def get_label_path(self, image_filename):
         return join(self.cut_label_folder, image_filename)
@@ -192,10 +194,13 @@ class KiTSConfig(BaseConfig):
             '3': 'masses',
         })
         self.dataset_folder = join(self.base_folder, 'dataset')  # 存放原始数据。
+        self.image_folder = join(self.base_folder, 'image')
+        self.label_folder = join(self.base_folder, 'label')
 
     def get_label_path(self, image_filename):
         case_name = image_filename.split('.')[0]
         return join(self.dataset_folder, case_name, 'segmentation.nii.gz')
+        # return join(self.label_folder, image_filename)
 
 # 任务设置。
 ablation_config = AblationConfig()

@@ -15,12 +15,17 @@
 import numpy as np
 from medpy import metric
 
+def increasing_metric(name):
+    return METRIC_DIRECTIONS.get(name)
+
+
+def get_worst_val(name):
+    return 0 if increasing_metric(name) else 1e3
 
 def assert_shape(test, reference):
 
     assert test.shape == reference.shape, "Shape mismatch: {} and {}".format(
         test.shape, reference.shape)
-
 
 class ConfusionMatrix:
 
@@ -415,4 +420,41 @@ ALL_METRICS = {
     "Total Negatives Test": total_negatives_test,
     "Total Positives Reference": total_positives_reference,
     "total Negatives Reference": total_negatives_reference
+}
+
+
+COMMON_METRICS = {
+    # "False Positive Rate": m.false_positive_rate,
+    "Dice": dice,  # 重叠率，越大越好。
+    "IOU": jaccard,  # 交并比，另一种重叠率，越大越好（IOU）。
+    # "HD": m.hausdorff_distance,  # 豪斯多夫距离，越小越好。Dice对mask的内部填充比较敏感，而hausdorff distance 对分割出的边界比较敏感。
+    "HD95": hausdorff_distance_95,  # 豪斯多夫距离去掉最大的一些值，越小越好。
+    "Precision": precision,  # 精确率，越大越好。
+    "Recall": recall,  # 查全率，越大越好。
+    "ASSD": avg_surface_distance_symmetric,  # 双边平均距离，越小越好。
+    # "Avg. Surface Distance": m.avg_surface_distance, # 单边平均距离，越小越好。
+    # "Accuracy": m.accuracy, # 预测类别正确的像素数占总像素数的比例，越大越好。 【没什么参考性，都是98%】
+    # "F1 Score": (m.fscore, True), # 综合考虑精确率和查全率，越大越好。
+    # 当Precision精确率更重要些，就调整β的值小于1
+    # 当Precision精确率和Recall召回率的重要性相同，β=1时，称为F1-score，权重相同
+    # 当Recall召回率更重要些，就调整β的值大于1
+    # "False Omission Rate": m.false_omission_rate,
+    # "Negative Predictive Value": m.negative_predictive_value,
+    # "False Negative Rate": m.false_negative_rate,
+    # "True Negative Rate": m.true_negative_rate,
+    # "False Discovery Rate": m.false_discovery_rate,
+    # "Total Positives Test": m.total_positives_test,
+    # "Total Negatives Test": m.total_negatives_test,
+    # "Total Positives Reference": m.total_positives_reference,
+    # "total Negatives Reference": m.total_negatives_reference
+}
+
+METRIC_DIRECTIONS = {
+    "Dice": True,
+    "IOU": True,
+    "HD": False,
+    "HD95": False,
+    "Precision": True,
+    "Recall": True,
+    "ASSD": False,
 }

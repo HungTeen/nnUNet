@@ -231,6 +231,7 @@ class HTTrainer(nnUNetTrainer):
                                    enable_deep_supervision: bool,
                                    invalid_args: list[str] = None,
                                    n_stages: Optional[int] = None,
+                                   cut_from_last: bool = True,
                                    print_args: bool = False) -> dict:
         """
         构建模型的通用部分。
@@ -252,7 +253,7 @@ class HTTrainer(nnUNetTrainer):
                 architecture_kwargs.pop(i)
 
         if n_stages:
-            architecture_kwargs = cfg.cut_stage(architecture_kwargs, n_stages)
+            architecture_kwargs = cfg.cut_stage(architecture_kwargs, n_stages, cut_from_last)
 
         if config.drop_out_rate:
             architecture_kwargs['dropout_op'] = get_matching_dropout(dimension=3)

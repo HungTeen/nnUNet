@@ -32,7 +32,7 @@ class UNETRTrainer(HTTrainer):
                                                             print_args=True)
 
         network = UNETR(
-            img_size=config.ablation_patch_size,
+            img_size=config.patch_size,
             **architecture_kwargs
         )
 

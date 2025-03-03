@@ -1,16 +1,23 @@
+import concurrent
+import multiprocessing
 import os
 import random
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool
+from queue import Queue
 from time import time
 
 import math
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 
 from nnunetv2.utilities.file_path_utilities import get_specific_folder, get_output_folder
 from pangteen import config, utils
 from pangteen.util import metrics as m
-from pangteen.util.metrics import METRIC_DIRECTIONS, COMMON_METRICS, get_worst_val
+from pangteen.util.metrics import COMMON_METRICS, get_worst_val, METRIC_DIRECTIONS
 
 
 class MetricManager:
@@ -31,13 +38,12 @@ class MetricManager:
             self.label_map[v] = k  # 标签名字 -> 标签值。
         self.summary_row_titles = self.labels + ["平均", "最佳", "最差", "75分位", "25分位"]
         self.summary_col_titles = list(COMMON_METRICS.keys())
+        self.metric_funcs = COMMON_METRICS.items()
+        self.metric_count = len(self.metric_funcs)
+        self.summary_rows = len(self.summary_row_titles)
+        self.round_limit = 3
 
-        self.summary_table_data = np.zeros((len(self.summary_row_titles), len(self.summary_col_titles)))
-        self.average_data = []  # 数据 -> 评价指标 -> 平均结果。
-        self.detail_table_data = {}  # 评价指标 -> 数据 -> 五个段的评估结果。
-        self.test_data_name = []  # 测试集名字。
         self.predict_result_folder = result_folder
-
 
     def evaluate(self):
         """
@@ -45,66 +51,85 @@ class MetricManager:
         """
         filenames = os.listdir(self.predict_result_folder)
         filenames = sorted(filenames)
+
+        print("Collecting all test data from {} ...".format(self.predict_result_folder))
+        infos = []
         for filename in filenames:
             # 排除其他文件的干扰。
             if not utils.is_niigz(filename):
                 continue
+            case_id = int(filename.split('.')[0].split('_')[-1])
+            if case_id in self.task_config.black_list:
+                continue
 
-            print("=========> start for filename {}".format(filename))
-            info = ImageInfo(self, filename)
-            start_time = time()
+            infos.append(ImageInfo(filename))
+            # if len(infos) > 8:
+            #     break
 
-            metric_results = info.evaluate_common_metrics(self)
+        # 开启多线程计算评价指标。
+        start_time = time()
+        print("Start parallel evaluating all test data ...")
+        with ThreadPoolExecutor(max_workers=config.max_thread_cnt) as executor:
+            for info in infos:
+                executor.submit(info.evaluate, self)
 
-            self.average_data.append(metric_results)
-            self.test_data_name.append(filename)
+        print("=========> Start to analyze the result ...")
+        self.analyze_result(infos)
 
-            end_time = time()
-            print("=========> cost {} seconds on evaluating test data".format(end_time - start_time))
-            start_time = end_time
+        print("=========> Finish evaluating all {} results ! Cost {} seconds.".format(len(infos), time() - start_time))
 
-        self.postprocess()
-
-        print("=========> Finish evaluating all {} results !".format(len(self.average_data)))
-
-    def postprocess(self):
+    def analyze_result(self, infos):
         """
         results: [filename, metric] 第一维是测试数据名，第二维是对应指标平均评估结果。
         """
-        results = np.array(self.average_data)
-        size = len(self.labels)
+        # (label, metric)
+        summary_table_data = np.zeros((len(self.summary_row_titles), len(self.summary_col_titles)))
+        label_count = len(self.labels)
+        # (filename, metric)，取标签的平均值。
+        metric_results = np.zeros((len(infos), self.metric_count))
+        evaluate_name_list = []
+        for i, info in enumerate(infos):
+            # (label, metric)
+            results = info.evaluate_table_data
+            evaluate_name_list.append(info.filename)
+            summary_table_data += results
+            for j in range(self.metric_count):
+                metric_results[i, j] = np.mean(results[:label_count, j])
+
         for i, metric in enumerate(self.summary_col_titles):
             increasing = METRIC_DIRECTIONS.get(metric)
 
-            self.summary_table_data[-5, i] = sum(self.summary_table_data[:size, i]) / size
-            self.summary_table_data[-4, i] = np.max(results[:, i])
-            self.summary_table_data[-3, i] = np.min(results[:, i])
-            self.summary_table_data[-2, i] = np.percentile(results[:, i], 75)
-            self.summary_table_data[-1, i] = np.percentile(results[:, i], 25)
+            summary_table_data[-5, i] = sum(summary_table_data[:label_count, i]) / label_count
+            summary_table_data[-4, i] = np.max(metric_results[:, i])
+            summary_table_data[-3, i] = np.min(metric_results[:, i])
+            summary_table_data[-2, i] = np.percentile(metric_results[:, i], 75)
+            summary_table_data[-1, i] = np.percentile(metric_results[:, i], 25)
             if not increasing:
-                self.summary_table_data[-4, i], self.summary_table_data[-3, i] = self.summary_table_data[-3, i], self.summary_table_data[-4, i]
-                self.summary_table_data[-2, i], self.summary_table_data[-1, i] = self.summary_table_data[-1, i], self.summary_table_data[-2, i]
+                summary_table_data[-4, i], summary_table_data[-3, i] = summary_table_data[-3, i], summary_table_data[-4, i]
+                summary_table_data[-2, i], summary_table_data[-1, i] = summary_table_data[-1, i], summary_table_data[-2, i]
 
         for i, label in enumerate(self.summary_row_titles):
             for j, metric in enumerate(self.summary_col_titles):
-                if i <= size:
-                    self.summary_table_data[i, j] = self.summary_table_data[i, j] / len(results)
+                if i <= label_count:
+                    summary_table_data[i, j] = summary_table_data[i, j] / len(infos)
 
-                self.summary_table_data[i, j] = round(self.summary_table_data[i, j], 4)
-                print("Table data for row : {}; col : {} is {}".format(label, metric, self.summary_table_data[i, j]))
+                summary_table_data[i, j] = round(summary_table_data[i, j], self.round_limit)
+                print("Table data for row : {}; col : {} is {}".format(label, metric, summary_table_data[i, j]))
+
         table_name = 'evaluate_val_data.xlsx' if self.val else 'evaluate_test_data.xlsx' if not self.train else 'evaluate_train_data.xlsx'
         if self.trainer:
             table_name = self.trainer + '_' + table_name
         table_writer = pd.ExcelWriter(table_name)
-        table = pd.DataFrame(data=self.summary_table_data, index=self.summary_row_titles, columns=self.summary_col_titles)
+        table = pd.DataFrame(data=summary_table_data, index=self.summary_row_titles, columns=self.summary_col_titles)
         table.to_excel(table_writer, sheet_name='Summary')
 
-        for j, (name, metric) in enumerate(COMMON_METRICS.items()):
-            detail_data = self.detail_table_data.get(name)
-            print(len(detail_data), len(detail_data[0]))
-            print(len(self.test_data_name))
-            cols = ['消融区域体素数/总体素数', ] + list(self.labels)
-            metric_table = pd.DataFrame(data=detail_data, index=self.test_data_name, columns=cols)
+        for j, (name, metric) in enumerate(self.metric_funcs):
+            detail_data = np.zeros((len(evaluate_name_list), len(self.labels)))
+            for i, info in enumerate(infos):
+                detail_data[i, :] += info.evaluate_table_data[:label_count, j]
+
+            detail_data = np.round(detail_data, self.round_limit)
+            metric_table = pd.DataFrame(data=detail_data, index=evaluate_name_list, columns=list(self.labels))
             metric_table.to_excel(table_writer, sheet_name=name)
 
         table_writer.close()
@@ -114,43 +139,46 @@ class MetricManager:
 
 
 class ImageInfo:
-    def __init__(self, manager: MetricManager, filename):
-        start_time = time()
+    def __init__(self, filename):
         self.filename = filename
-        self.predict_image, self.predict, spacing1 = utils.read_image(manager.predict_result_folder, filename)
-        self.gt_image, self.gt, spacing2 = utils.read_image(manager.get_label_path(filename))
         self.confusion_matrix = m.ConfusionMatrix()
-        print("cost {} seconds on initialize image".format(time() - start_time))
+        self.evaluate_table_data = None
 
-    def evaluate_common_metrics(self, manager):
-        metric_results = []
-        for j, (name, metric) in enumerate(COMMON_METRICS.items()):
+    def evaluate(self, manager):
+        """
+        评估一张图像的预测结果。
+        """
+        print("Evaluating {} ...".format(self.filename))
+        evaluate_start_time = time()
+        predict_image, predict, _ = utils.read_image(manager.predict_result_folder, self.filename)
+        gt_image, gt, _ = utils.read_image(manager.get_label_path(self.filename))
+        # 冗余了几行，方便计算。
+        self.evaluate_table_data = np.zeros((manager.summary_rows, manager.metric_count))
+        # 计算每个评价指标的结果。
+        for j, (name, metric) in enumerate(manager.metric_funcs):
             start_time = time()
             tmp_val = []
             res = 0
+            # 计算每个标签的评价指标。
             for i, label_name in enumerate(manager.labels):
                 label = manager.label_map[label_name]
                 # 把label变成np.uint8类型，否则会出现错误。
                 label = np.uint8(label)
-                self.confusion_matrix.set_test(self.predict == label)
-                self.confusion_matrix.set_reference(self.gt == label)
+                self.confusion_matrix.set_test(predict == label)
+                self.confusion_matrix.set_reference(gt == label)
                 metric_val = metric(confusion_matrix=self.confusion_matrix, nan_for_nonexisting=True)
                 if math.isnan(metric_val):
                     fix_metric_val = get_worst_val(name)
                     metric_val = fix_metric_val
                     print("Why metric value of {} is NaN ?????????? !, fix it to {}".format(self.filename,
                                                                                             fix_metric_val))
-                res += metric_val
-                tmp_val.append(round(metric_val, 2))
-                manager.summary_table_data[i, j] += metric_val
 
-            metric_results.append(res / len(manager.labels))
-            row_data = ['{}/{}'.format(np.sum(self.gt != 0), self.gt.shape[0] * self.gt.shape[1] * self.gt.shape[2]), ] + tmp_val
-            manager.detail_table_data.setdefault(name, []).append(row_data)
+                tmp_val.append(round(metric_val, manager.round_limit))
+                self.evaluate_table_data[i, j] = metric_val
+
             print("cost {} seconds on calculating {} : {}".format(time() - start_time, name, tmp_val))
 
-        return metric_results
-
+        print("Evaluating {} done ! Cost {} seconds.".format(self.filename, time() - evaluate_start_time))
 
 def main():
     import argparse

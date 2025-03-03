@@ -60,6 +60,7 @@ class PangTeenNet(nn.Module):
         self.seg_layers = nn.ModuleList()
         # 跳跃连接层的合并，当skip_merge_type是None时，需要这个层。
         self.skip_merge_blocks = nn.ModuleList()
+        self.skip_fusion_block = None
 
 
     # def forward(self, x):
@@ -122,6 +123,9 @@ class PangTeenNet(nn.Module):
 
         if self.bottle_neck is not None:
             x = self.bottle_neck(x)
+
+        if self.skip_fusion_block is not None:
+            skips = self.skip_fusion_block(skips)
 
         seg_outputs = []
         for i in range(1, self.n_stages):

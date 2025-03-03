@@ -1,4 +1,3 @@
-import os
 from typing import Union, List, Tuple, Type
 
 import torch
@@ -7,21 +6,14 @@ from torch import nn
 from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
 
-from pangteen import config
 from pangteen.network import cfg
 from pangteen.network.common import helper
-from pangteen.network.common.kan import KANLinear
-from pangteen.network.km_unet.block import SS2D, EMA
 from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.ptnet.conv_blocks import BasicConvBlock, MultiBasicConvBlock
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-import math
-
 from pangteen.network.ptnet.fushion_blocks import SelectiveFusionBlock
 from pangteen.network.ptnet.ptnet import PangTeenNet
-from pangteen.network.ptnet.ukan import PatchEmbed, KANBlock
-
 from pangteen.network.ptnet.transformer_blocks import TransformerBlock
+from pangteen.network.ptnet.ukan import PatchEmbed, KANBlock
 
 
 class UKANDownSampleBlock(nn.Module):
@@ -169,8 +161,7 @@ class UKAN_3D(PangTeenNet):
                  decode_kan_num: int = 2,
                  reverse_kan_order: bool = False,
                  spatial_dim: int = 3,
-                 # embed_dims=[32, 64, 256, 320, 512],
-                 embed_dims=[32, 64, 128, 256, 512],
+                 embed_dims=[32, 64, 128, 256, 512, 512],
                  no_kan=False,
                  drop_rate=0.,
                  drop_path_rate=0.,

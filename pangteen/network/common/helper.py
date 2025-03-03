@@ -105,6 +105,7 @@ def get_matching_interpolate(dimension: int = None) -> str:
         return 'trilinear'
     raise ValueError("Only 2d and 3d supported")
 
+
 def get_matching_instancenorm(conv_op: Type[_ConvNd] = None, dimension: int = None) -> Type[_InstanceNorm]:
     """
     You MUST set EITHER conv_op OR dimension. Do not set both!
@@ -241,7 +242,7 @@ def get_default_network_config(dimension: int = 2,
     elif norm_type == "in":
         config['norm_op'] = get_matching_instancenorm(dimension=dimension)
 
-    config['norm_op_kwargs'] = None # this will use defaults
+    config['norm_op_kwargs'] = None  # this will use defaults
 
     if nonlin == "LeakyReLU":
         config['nonlin'] = nn.LeakyReLU
@@ -297,6 +298,18 @@ def channel_to_the_second(t):
         raise ValueError(f"Unsupported tensor dimension: {t.ndimension()}D. Expected 4D or 5D tensor.")
 
     return t
+
+
+def to_token(x):
+    # B C X Y Z -> B C X*Y*Z
+    size = x.size()[2:]
+    return x.view(x.size(0), x.size(1), -1), size
+
+
+def to_patch(x, size):
+    # B C X*Y*Z -> B C X Y Z
+    return x.view(x.size(0), x.size(1), *size)
+
 
 def maybe_to_torch(d):
     if isinstance(d, list):
