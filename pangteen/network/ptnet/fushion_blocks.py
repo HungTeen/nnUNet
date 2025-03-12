@@ -7,8 +7,8 @@ from torch.nn.modules.conv import _ConvNd
 from pangteen.network.common import helper
 from pangteen.network.common.kan import KANLinear
 from pangteen.network.ptnet.conv_blocks import BasicConvBlock
+from pangteen.network.ptnet.kan_blocks import KANBlock
 from pangteen.network.ptnet.mamba_blocks import MambaLayer
-from pangteen.network.ptnet.ukan import KANBlock
 
 
 class SelectiveFusionBlock(nn.Module):
@@ -20,6 +20,7 @@ class SelectiveFusionBlock(nn.Module):
                  channels : int,
                  conv_op: Type[_ConvNd],
                  proj_type: str = 'mlp', # 选择投影层的类型，可以是'conv'或者'mlp'或者'kan'.
+                 use_max: bool = False,
         ):
         super().__init__()
         # 投影层，特征通道数缩小为原来的1/2。
@@ -33,6 +34,7 @@ class SelectiveFusionBlock(nn.Module):
         else:
             raise ValueError(f"Unknown projection type: {proj_type}")
         self.nonlin = nn.Softmax(dim=1)
+        self.use_max = use_max
 
 
     def forward(self, x1, x2):
@@ -44,7 +46,12 @@ class SelectiveFusionBlock(nn.Module):
         # 连接两个输入
         x = torch.cat([x1, x2], dim=1)  # shape: (B, 2C, H, W, D)
         # 全局平均池化
-        x = torch.mean(x, dim=[2, 3, 4], keepdim=True) # shape: (B, 2C, 1, 1, 1)
+        mean_x = torch.mean(x, dim=[2, 3, 4], keepdim=True) # shape: (B, 2C, 1, 1, 1)
+        if self.use_max:
+            # 全局最大池化
+            max_x = torch.amax(x, dim=[2, 3, 4], keepdim=True) # shape: (B, 2C, 1, 1, 1)
+            mean_x += max_x
+        x = mean_x
         # 投影
         # 将channel变为最后一个维度。
         x = x.permute(0, 2, 3, 4, 1)  # shape: (B, 1, 1, 1, 2C)
@@ -61,21 +68,22 @@ class MultiScaleFusionBlock(nn.Module):
 
     def __init__(self, features: list, conv_op: Type[_ConvNd],
                  norm_op: Union[None, Type[nn.Module]] = None,
-                 norm_op_kwargs: dict = None,
                  nonlin: Union[None, Type[torch.nn.Module]] = None,
                  nonlin_kwargs: dict = None,
                  norm_layer=nn.LayerNorm,
-                 drop_rate=0.,
-                 drop_path_rate=0.,
-                 no_kan=False,
-                 use_mamba_v2=False):
+                 use_mamba_v2=False,
+                 tri_orientation=False,
+                 fusion_count=5
+                 ):
         super().__init__()
-        self.features = features
+        self.fusion_count = fusion_count
+        self.features = features[:fusion_count]
+        self.tri_orientation = tri_orientation
         feature_sum = sum(features)
-        mid = (len(features) - 1) / 2.
-        dis = len(features) // 2
+        mid = (fusion_count - 1) / 2.
+        dis = fusion_count // 2
         self.samples = nn.ModuleList()
-        for i in range(len(features)):
+        for i in range(fusion_count):
             if i < mid:
                 stride = 2**(dis-i)
                 self.samples.append(nn.AvgPool3d(kernel_size=stride, stride=stride))
@@ -85,34 +93,48 @@ class MultiScaleFusionBlock(nn.Module):
             else:
                 self.samples.append(None)
         self.mamba = MambaLayer(dim=feature_sum, channel_token=False, use_v2=use_mamba_v2)
-        self.kan_block = KANBlock(feature_sum, conv_op=conv_op,
-            drop=drop_rate, drop_path=drop_path_rate, no_kan=no_kan,
-            norm_layer=norm_layer, norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,
-            nonlin=nonlin, nonlin_kwargs=nonlin_kwargs, layer_count=1)
+        if self.tri_orientation:
+            self.mamba2 = MambaLayer(dim=feature_sum, channel_token=False, use_v2=use_mamba_v2)
+            self.mamba3 = MambaLayer(dim=feature_sum, channel_token=False, use_v2=use_mamba_v2)
+        # self.mlp = nn.Sequential(
+        #     nn.Linear(feature_sum, feature_sum),
+        #     nn.ReLU(),
+        #     nn.Linear(feature_sum, feature_sum)
+        # )
+        self.mlp = None
+        self.layer_norm = norm_layer(feature_sum)
 
     def forward(self, skips):
-        size_list = []
-        for i, skip in enumerate(skips):
+        resmaple_skips = skips[:self.fusion_count]
+        for i, skip in enumerate(resmaple_skips):
             if self.samples[i] is not None:
                 skip = self.samples[i](skip)
-            skip, size = helper.to_token(skip)
-            size_list.append(size)
-            skips[i] = skip
 
-        x = torch.cat(skips, dim=1)
-        x = self.mamba(x)
-        # x = x.permute(0, 2, 1)
-        # x = self.kan_block(x, size_list[2])
-        # x = x.permute(0, 2, 1)
+            resmaple_skips[i] = skip
+
+        concat = torch.cat(resmaple_skips, dim=1)
+        x = self.mamba(concat)
+        if self.tri_orientation:
+            x2 = self.mamba2(concat)
+            x3 = self.mamba3(concat)
+            x = x + x2 + x3
+            x = helper.channel_to_the_last(x)
+            x = self.layer_norm(x)
+            x = helper.channel_to_the_second(x)
+
+        if self.mlp is not None:
+            x = helper.channel_to_the_last(x)
+            x = self.mlp(x)
+            x = helper.channel_to_the_second(x)
+
         # 将 x 还原为之前的列表。
         feature_sum = 0
         for i, feature in enumerate(self.features):
             skip = x[:, feature_sum:feature_sum+feature]
-            skip = helper.to_patch(skip, size_list[i])
             if self.samples[-i-1] is not None:
                 skip = self.samples[-i-1](skip)
             feature_sum += feature
-            skips[i] = skip
+            skips[i] = skip + skips[i]
         return skips
 
 if __name__ == '__main__':
@@ -126,3 +148,11 @@ if __name__ == '__main__':
     block(skips)
     for i, skip in enumerate(skips):
         print(f"Skip {i}: {skip.size()}")
+    # x = torch.arange(0, 8).reshape(2, 2, 2)
+    # print(x)
+    # x1 = x
+    # x2 = x.permute(1, 2, 0)
+    # x3 = x.permute(2, 0, 1)
+    # print(x1.flatten(0))
+    # print(x2.flatten(0))
+    # print(x3.flatten(0))

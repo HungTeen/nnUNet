@@ -294,5 +294,5 @@ class UNETR_PP(SegmentationNetwork):
 
 
 if __name__ == '__main__':
-    model = UNETR_PP(**cfg.default_network_args)
-    NetworkAnalyzer(model, print_flops=True).analyze()
+    model = UNETR_PP(**cfg.stage5_network_args).cuda()
+    NetworkAnalyzer(model, print_flops=True, test_backward=True).analyze()

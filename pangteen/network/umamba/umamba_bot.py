@@ -20,6 +20,11 @@ from dynamic_network_architectures.building_blocks.helper import maybe_convert_s
 from torch.cuda.amp import autocast
 from dynamic_network_architectures.building_blocks.residual import BasicBlockD
 
+from pangteen import config
+from pangteen.network import cfg
+from pangteen.network.network_analyzer import NetworkAnalyzer
+from pangteen.network.umamba.umamba_enc import UMambaEnc
+
 
 class UpsampleLayer(nn.Module):
     def __init__(
@@ -492,3 +497,13 @@ def get_umamba_bot_3d_from_plans(
     model.apply(InitWeights_He(1e-2))
 
     return model
+
+if __name__ == '__main__':
+    model = UMambaBot(
+        **cfg.default_network_args
+    ).cuda()
+    # model = UMambaEnc(
+    #     input_size=config.patch_size,
+    #     **cfg.default_network_args
+    # ).cuda()
+    NetworkAnalyzer(model, print_flops=True, test_backward=True).analyze()

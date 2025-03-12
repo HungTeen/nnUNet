@@ -4,11 +4,14 @@ from dynamic_network_architectures.building_blocks.simple_conv_blocks import Sta
 from torch.nn import LeakyReLU
 from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
+
+from pangteen.network import cfg
 from pangteen.network.common.helper import *
 import torch
 from torch import nn
 from typing import Union, Type, List, Tuple, Optional
 
+from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.ptnet.conv_blocks import DownSampleBlock, UpSampleBlock, BasicConvBlock, MultiBasicConvBlock
 from pangteen.network.ptnet.ptnet import PangTeenNet
 from pangteen.network.ptnet.ptunet import PangTeenUNet
@@ -193,37 +196,43 @@ class PangTeenMultiResUNet(PangTeenNet):
         )
 
 
+
 if __name__ == "__main__":
-    # 设置CUDA可见设备
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     network = PangTeenMultiResUNet(
-        input_channels=1,
-        n_stages=6,
-        features_per_stage=[32, 64, 128, 256, 320, 512],
-        # features_per_stage= [16, 32, 64, 128, 256, 512],
-        conv_op=nn.Conv3d,
-        kernel_sizes=[[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
-        strides=[[1, 1, 1], [1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
-        n_conv_per_stage=[2, 2, 2, 2, 2, 2],
-        num_classes=2,
-        n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
-        conv_bias=True,
-        deep_supervision=True
+        **cfg.stage5_network_args
     ).cuda()
 
-    x = torch.zeros((2, 1, 64, 128, 128), requires_grad=True).cuda()
-    y = torch.rand((2, 2, 64, 128, 128), requires_grad=False).cuda()
-
-    with torch.autocast(device_type='cuda', enabled=True):
-        pred_list = network(x)
-        for pred in pred_list:
-            y = torch.rand(pred.size(), requires_grad=False).cuda()
-            loss = F.cross_entropy(pred, y.argmax(1))
-            print(loss)
-
-
-    def count_parameters(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-    print(count_parameters(network))
+    NetworkAnalyzer(network, print_flops=True, test_backward=False).analyze()
+    # # 设置CUDA可见设备
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    # network = PangTeenMultiResUNet(
+    #     input_channels=1,
+    #     n_stages=6,
+    #     features_per_stage=[32, 64, 128, 256, 320, 512],
+    #     # features_per_stage= [16, 32, 64, 128, 256, 512],
+    #     conv_op=nn.Conv3d,
+    #     kernel_sizes=[[1, 3, 3], [1, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]],
+    #     strides=[[1, 1, 1], [1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]],
+    #     n_conv_per_stage=[2, 2, 2, 2, 2, 2],
+    #     num_classes=2,
+    #     n_conv_per_stage_decoder=[2, 2, 2, 2, 2],
+    #     conv_bias=True,
+    #     deep_supervision=True
+    # ).cuda()
+    #
+    # x = torch.zeros((2, 1, 64, 128, 128), requires_grad=True).cuda()
+    # y = torch.rand((2, 2, 64, 128, 128), requires_grad=False).cuda()
+    #
+    # with torch.autocast(device_type='cuda', enabled=True):
+    #     pred_list = network(x)
+    #     for pred in pred_list:
+    #         y = torch.rand(pred.size(), requires_grad=False).cuda()
+    #         loss = F.cross_entropy(pred, y.argmax(1))
+    #         print(loss)
+    #
+    #
+    # def count_parameters(model):
+    #     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    #
+    #
+    # print(count_parameters(network))

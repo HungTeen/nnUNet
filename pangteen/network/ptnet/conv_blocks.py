@@ -8,6 +8,7 @@ from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
 
 from pangteen.network.common.helper import get_matching_pool_op, get_matching_convtransp
+from pangteen.network.ptnet.mlp_blocks import ConvMlp
 from pangteen.network.ptnet.norm_blocks import LayerNorm
 from pangteen.network.unet.block import StackedConvBlocks
 from timm.models.layers import trunc_normal_, DropPath
@@ -323,4 +324,73 @@ class UXConvBlock(nn.Module):
 
         x = x.permute(0, 4, 1, 2, 3)  # (N, H, W, D, C) -> (N, C, H, W, D)
         x = input + self.drop_path(x)
+        return x
+
+
+class InceptionDWConv(nn.Module):
+    """
+    Inception depth wise convolution
+    """
+
+    def __init__(self, in_channels, square_kernel_size=3, band_kernel_size=7, branch_ratio=0.2):
+        super().__init__()
+
+        gc = int(in_channels * branch_ratio)  # channel numbers of a convolution branch
+
+        self.dwconv_all = BasicConvBlock(gc, gc, nn.Conv3d, square_kernel_size, 1, conv_group=gc)
+        self.dwconv_h = BasicConvBlock(gc, gc, nn.Conv3d, (band_kernel_size, 1, 1), 1, conv_group=gc)
+        self.dwconv_w = BasicConvBlock(gc, gc, nn.Conv3d, (1, band_kernel_size, 1), 1, conv_group=gc)
+        self.dwconv_d = BasicConvBlock(gc, gc, nn.Conv3d, (1, 1, band_kernel_size), 1, conv_group=gc)
+
+        self.split_indexes = (in_channels - 4 * gc, gc, gc, gc, gc)
+
+    def forward(self, x):
+        x_id, x_all, x_h, x_w, x_d = torch.split(x, self.split_indexes, dim=1)
+        return torch.cat(
+            (x_id, self.dwconv_all(x_all), self.dwconv_h(x_h), self.dwconv_w(x_w), self.dwconv_d(x_d)),
+            dim=1,
+        )
+
+
+
+class MetaNeXtBlock(nn.Module):
+    """ MetaNeXtBlock Block
+    Args:
+        dim (int): Number of input channels.
+        drop_path (float): Stochastic depth rate. Default: 0.0
+        ls_init_value (float): Init value for Layer Scale. Default: 1e-6.
+    """
+
+    def __init__(
+            self,
+            dim,
+            out_dim,
+            token_mixer=nn.Identity,
+            norm_layer=nn.BatchNorm3d,
+            norm_op_kwargs=None,
+            mlp_layer=ConvMlp,
+            mlp_ratio=4,
+            act_layer=nn.GELU,
+            ls_init_value=1e-6,
+            drop_path=0.,
+
+    ):
+        super().__init__()
+        self.token_mixer = token_mixer(dim)
+        self.norm = norm_layer(dim, **norm_op_kwargs)
+        # self.mlp = mlp_layer(dim, int(mlp_ratio * dim), out_dim, act_layer=act_layer)
+        self.mlp = BasicConvBlock(dim, out_dim, nn.Conv3d, 1, 1, conv_bias=True, norm_op=norm_layer, norm_op_kwargs=norm_op_kwargs, nonlin=act_layer)
+        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim)) if ls_init_value else None
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.nonlin = act_layer()
+
+    def forward(self, x):
+        shortcut = x
+        x = self.token_mixer(x)
+        x = self.norm(x)
+        x = self.mlp(x)
+        if self.gamma is not None:
+            x = x.mul(self.gamma.reshape(1, -1, 1, 1, 1))
+        x = self.drop_path(x) + shortcut
+        x = self.nonlin(x)
         return x

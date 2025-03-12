@@ -5,7 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.conv import _ConvNd
 
+from pangteen.network import cfg
 from pangteen.network.mednext import blocks
+from pangteen.network.network_analyzer import NetworkAnalyzer
 
 
 class MedNeXtBlock(nn.Module):
@@ -566,22 +568,37 @@ class MedNeXt(nn.Module):
 
 if __name__ == "__main__":
     network = MedNeXt(
-        input_channels=1,
         n_channels=32,
-        num_classes=2,
         exp_r=[2, 3, 4, 4, 4, 4, 4, 3, 2],  # Expansion ratio as in Swin Transformers
-        # exp_r = 2,
         kernel_size=3,  # Can test kernel_size
-        deep_supervision=True,  # Can be used to test deep supervision
         do_res=True,  # Can be used to individually test residual connection
         do_res_up_down=True,
-        # block_counts = [2,2,2,2,2,2,2,2,2],
-        block_counts=[3, 4, 8, 8, 8, 8, 8, 4, 3],
-        checkpoint_style=None,
-        dim='2d',
-        grn=True
-
+        block_counts = [2,2,2,2,2,2,2,2,2],
+        # block_counts=[3, 4, 8, 8, 8, 8, 8, 4, 3],
+        dim='3d',
+        # grn=True,
+        **cfg.stage5_network_args
     ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
+
+    # network = MedNeXt(
+    #     input_channels=1,
+    #     n_channels=32,
+    #     num_classes=2,
+    #     exp_r=[2, 3, 4, 4, 4, 4, 4, 3, 2],  # Expansion ratio as in Swin Transformers
+    #     # exp_r = 2,
+    #     kernel_size=3,  # Can test kernel_size
+    #     deep_supervision=True,  # Can be used to test deep supervision
+    #     do_res=True,  # Can be used to individually test residual connection
+    #     do_res_up_down=True,
+    #     # block_counts = [2,2,2,2,2,2,2,2,2],
+    #     block_counts=[3, 4, 8, 8, 8, 8, 8, 4, 3],
+    #     checkpoint_style=None,
+    #     dim='2d',
+    #     grn=True
+    #
+    # ).cuda()
 
 
     # network = MedNeXt_RegularUpDown(
@@ -596,13 +613,13 @@ if __name__ == "__main__":
     #
     #     ).cuda()
 
-    def count_parameters(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-    print("State_dict keys:", network.state_dict().keys())
-
-    print(count_parameters(network))
+    # def count_parameters(model):
+    #     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    #
+    #
+    # print("State_dict keys:", network.state_dict().keys())
+    #
+    # print(count_parameters(network))
 
     # from fvcore.nn import FlopCountAnalysis
     # from fvcore.nn import parameter_count_table

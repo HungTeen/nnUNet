@@ -27,12 +27,13 @@ config_list = []
 
 class BaseConfig:
 
-    def __init__(self, task_name: str, task_patch_size: tuple, label_map: dict, folder_name : Optional[str] = None):
+    def __init__(self, task_name: str, task_patch_size: tuple, label_map: dict, folder_name : Optional[str] = None, region_label=False):
         self.task_name = task_name
         self.patch_size = task_patch_size
         self.label_map = label_map
         self.folder_name = folder_name if folder_name else task_name
         self.base_folder = join(my_folder, self.folder_name)  # 项目数据的根路径。
+        self.region_label = region_label  # 一个实质占多个标签（如KiTS2023）。
         self.black_list = []
         config_list.append(self)
 
@@ -188,14 +189,17 @@ class KiTSConfig(BaseConfig):
 
     def __init__(self):
         super().__init__(task_name='KiTS', task_patch_size=(128, 128, 128), label_map={
-            '0': 'background',
-            '1': 'kidney',
-            '2': 'tumor',
-            '3': 'masses',
-        })
+            "background": 0,
+            "kidney": (1, 2, 3),
+            "masses": (2, 3),
+            "tumor": 2
+        }, region_label=True)
         self.dataset_folder = join(self.base_folder, 'dataset')  # 存放原始数据。
         self.image_folder = join(self.base_folder, 'image')
         self.label_folder = join(self.base_folder, 'label')
+        self.black_list = [
+            100, 123, 213, 411, 541, 556
+        ]
 
     def get_label_path(self, image_filename):
         case_name = image_filename.split('.')[0]

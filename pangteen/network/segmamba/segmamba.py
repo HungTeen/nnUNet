@@ -433,4 +433,4 @@ if __name__ == "__main__":
         **cfg.default_network_args
     ).cuda()
 
-    NetworkAnalyzer(network, print_flops=False).analyze()
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()

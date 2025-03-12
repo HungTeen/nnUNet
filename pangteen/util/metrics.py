@@ -11,6 +11,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
+from typing import Union, Tuple
 
 import numpy as np
 from medpy import metric
@@ -399,6 +400,22 @@ def avg_surface_distance_symmetric(test=None, reference=None, confusion_matrix=N
 
     return metric.assd(test, reference, voxel_spacing, connectivity)
 
+def construct_label_mask(segmentation: np.ndarray, label: Union[int, Tuple[int, ...]]) -> np.ndarray:
+    """
+    Takes a segmentation as input (integer map with values indicating what class a voxel belongs to) and returns a
+    boolean array based on where the selected label/HEC is. If label is a tuple, all pixels belonging to any of the
+    listed classes will be set to True in the results. The rest remains False.
+    """
+    if not isinstance(label, (tuple, list)):
+        label = [label]
+
+    mask = np.zeros(segmentation.shape, dtype=bool)
+    for l in label:
+        # 把label变成np.uint8类型，否则会出现错误。
+        l = np.uint8(l)
+        mask[segmentation == l] = True
+
+    return mask
 
 ALL_METRICS = {
     "False Positive Rate": false_positive_rate,

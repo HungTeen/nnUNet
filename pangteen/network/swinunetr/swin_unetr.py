@@ -27,6 +27,9 @@ from monai.networks.layers import DropPath, trunc_normal_
 from monai.utils import ensure_tuple_rep, look_up_option, optional_import
 from monai.utils.deprecate_utils import deprecated_arg
 
+from pangteen import config
+from pangteen.network import cfg
+from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.swinunetr.block import MERGING_MODE, BasicLayer
 
 rearrange, _ = optional_import("einops", name="rearrange")
@@ -549,3 +552,12 @@ def filter_swinunetr(key, value):
         return new_key, value
     else:
         return None
+
+if __name__ == "__main__":
+    network = SwinUNETR(
+        img_size=config.patch_size,
+        use_v2=True,
+        **cfg.default_network_args
+    ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()

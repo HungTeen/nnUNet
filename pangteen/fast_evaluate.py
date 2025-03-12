@@ -17,7 +17,7 @@ import pandas as pd
 from nnunetv2.utilities.file_path_utilities import get_specific_folder, get_output_folder
 from pangteen import config, utils
 from pangteen.util import metrics as m
-from pangteen.util.metrics import COMMON_METRICS, get_worst_val, METRIC_DIRECTIONS
+from pangteen.util.metrics import COMMON_METRICS, get_worst_val, METRIC_DIRECTIONS, construct_label_mask
 
 
 class MetricManager:
@@ -28,20 +28,26 @@ class MetricManager:
             result_folder: 预测结果文件夹。
             task_config: 任务配置。
         """
-        self.labels = list(task_config.label_map.values())[1:]  # 除了背景外的标签。
+        self.label_map = {}
+        if task_config.region_label:
+            self.labels = list(task_config.label_map.keys())[1:]  # 除了背景外的标签。
+            self.label_map = task_config.label_map
+        else:
+            self.labels = list(task_config.label_map.values())[1:]  # 除了背景外的标签。
+            for k, v in task_config.label_map.items():
+                self.label_map[v] = int(k)  # 标签名字 -> 标签值。
+
         self.task_config = task_config
         self.val = val
         self.train = train
         self.trainer = trainer
-        self.label_map = {}
-        for k, v in task_config.label_map.items():
-            self.label_map[v] = k  # 标签名字 -> 标签值。
         self.summary_row_titles = self.labels + ["平均", "最佳", "最差", "75分位", "25分位"]
         self.summary_col_titles = list(COMMON_METRICS.keys())
         self.metric_funcs = COMMON_METRICS.items()
         self.metric_count = len(self.metric_funcs)
         self.summary_rows = len(self.summary_row_titles)
         self.round_limit = 3
+        self.abandon_limit = 4
 
         self.predict_result_folder = result_folder
 
@@ -63,7 +69,7 @@ class MetricManager:
                 continue
 
             infos.append(ImageInfo(filename))
-            # if len(infos) > 8:
+            # if len(infos) > 5:
             #     break
 
         # 开启多线程计算评价指标。
@@ -82,39 +88,13 @@ class MetricManager:
         """
         results: [filename, metric] 第一维是测试数据名，第二维是对应指标平均评估结果。
         """
-        # (label, metric)
-        summary_table_data = np.zeros((len(self.summary_row_titles), len(self.summary_col_titles)))
-        label_count = len(self.labels)
-        # (filename, metric)，取标签的平均值。
-        metric_results = np.zeros((len(infos), self.metric_count))
+
         evaluate_name_list = []
         for i, info in enumerate(infos):
-            # (label, metric)
-            results = info.evaluate_table_data
             evaluate_name_list.append(info.filename)
-            summary_table_data += results
-            for j in range(self.metric_count):
-                metric_results[i, j] = np.mean(results[:label_count, j])
 
-        for i, metric in enumerate(self.summary_col_titles):
-            increasing = METRIC_DIRECTIONS.get(metric)
-
-            summary_table_data[-5, i] = sum(summary_table_data[:label_count, i]) / label_count
-            summary_table_data[-4, i] = np.max(metric_results[:, i])
-            summary_table_data[-3, i] = np.min(metric_results[:, i])
-            summary_table_data[-2, i] = np.percentile(metric_results[:, i], 75)
-            summary_table_data[-1, i] = np.percentile(metric_results[:, i], 25)
-            if not increasing:
-                summary_table_data[-4, i], summary_table_data[-3, i] = summary_table_data[-3, i], summary_table_data[-4, i]
-                summary_table_data[-2, i], summary_table_data[-1, i] = summary_table_data[-1, i], summary_table_data[-2, i]
-
-        for i, label in enumerate(self.summary_row_titles):
-            for j, metric in enumerate(self.summary_col_titles):
-                if i <= label_count:
-                    summary_table_data[i, j] = summary_table_data[i, j] / len(infos)
-
-                summary_table_data[i, j] = round(summary_table_data[i, j], self.round_limit)
-                print("Table data for row : {}; col : {} is {}".format(label, metric, summary_table_data[i, j]))
+        summary_table_data = self.calculate_summary_data(infos)
+        label_count = len(self.labels)
 
         table_name = 'evaluate_val_data.xlsx' if self.val else 'evaluate_test_data.xlsx' if not self.train else 'evaluate_train_data.xlsx'
         if self.trainer:
@@ -132,7 +112,61 @@ class MetricManager:
             metric_table = pd.DataFrame(data=detail_data, index=evaluate_name_list, columns=list(self.labels))
             metric_table.to_excel(table_writer, sheet_name=name)
 
+        # 对 infos 按 Dice 升序排序。
+        infos = sorted(infos, key=lambda x: np.mean(x.evaluate_table_data[:label_count, 0]))
+        abandon_list = []
+        row_list = []
+        gap = 1 if len(infos) < 50 else 2
+        for i in range(self.abandon_limit):
+            info = infos[i]
+            print("Abandon {} : {}".format(info.filename, np.mean(info.evaluate_table_data[:label_count, 0])))
+
+            summary_table_data = self.calculate_summary_data(infos[gap*(i+1):])
+            abandon_list.append(summary_table_data)
+            row_list += self.summary_row_titles
+
+        abandon_data = np.vstack(abandon_list)
+        abandon_data = np.round(abandon_data, self.round_limit)
+        abandon_table = pd.DataFrame(data=abandon_data, index=row_list, columns=self.summary_col_titles)
+        abandon_table.to_excel(table_writer, sheet_name='Abandon')
+
         table_writer.close()
+
+    def calculate_summary_data(self, infos):
+        summary_table_data = np.zeros((len(self.summary_row_titles), len(self.summary_col_titles)))
+        metric_results = np.zeros((len(infos), self.metric_count))
+        evaluate_name_list = []
+        label_count = len(self.labels)
+        for i, info in enumerate(infos):
+            # (label, metric)
+            results = info.evaluate_table_data
+            evaluate_name_list.append(info.filename)
+            summary_table_data += results
+            for j in range(self.metric_count):
+                metric_results[i, j] = np.mean(results[:label_count, j])
+
+        for i, metric in enumerate(self.summary_col_titles):
+            increasing = METRIC_DIRECTIONS.get(metric)
+
+            summary_table_data[-5, i] = sum(summary_table_data[:label_count, i]) / label_count
+            summary_table_data[-4, i] = np.max(metric_results[:, i])
+            summary_table_data[-3, i] = np.min(metric_results[:, i])
+            summary_table_data[-2, i] = np.percentile(metric_results[:, i], 75)
+            summary_table_data[-1, i] = np.percentile(metric_results[:, i], 25)
+            if not increasing:
+                summary_table_data[-4, i], summary_table_data[-3, i] = summary_table_data[-3, i], summary_table_data[
+                    -4, i]
+                summary_table_data[-2, i], summary_table_data[-1, i] = summary_table_data[-1, i], summary_table_data[
+                    -2, i]
+
+        for i, label in enumerate(self.summary_row_titles):
+            for j, metric in enumerate(self.summary_col_titles):
+                if i <= label_count:
+                    summary_table_data[i, j] = summary_table_data[i, j] / len(infos)
+
+                summary_table_data[i, j] = round(summary_table_data[i, j], self.round_limit)
+
+        return summary_table_data
 
     def get_label_path(self, image_filename):
         return self.task_config.get_label_path(image_filename)
@@ -162,10 +196,8 @@ class ImageInfo:
             # 计算每个标签的评价指标。
             for i, label_name in enumerate(manager.labels):
                 label = manager.label_map[label_name]
-                # 把label变成np.uint8类型，否则会出现错误。
-                label = np.uint8(label)
-                self.confusion_matrix.set_test(predict == label)
-                self.confusion_matrix.set_reference(gt == label)
+                self.confusion_matrix.set_test(construct_label_mask(predict, label))
+                self.confusion_matrix.set_reference(construct_label_mask(gt, label))
                 metric_val = metric(confusion_matrix=self.confusion_matrix, nan_for_nonexisting=True)
                 if math.isnan(metric_val):
                     fix_metric_val = get_worst_val(name)

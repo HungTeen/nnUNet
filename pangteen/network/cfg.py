@@ -14,6 +14,7 @@ default_network_args = {
     'n_conv_per_stage_decoder': [2, 2, 2, 2, 2],
     'conv_bias': True,
     'norm_op': helper.get_matching_instancenorm(dimension=3),
+    'norm_op_kwargs': {},
     'nonlin': nn.LeakyReLU,
     'nonlin_kwargs': {'negative_slope': 1e-2, 'inplace': True},
     'deep_supervision': True,

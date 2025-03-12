@@ -470,3 +470,14 @@ class UNext_S(nn.Module):
         return self.final(out)
 
 # EOF
+
+if __name__ == '__main__':
+    size = 3
+    shift_size = 2
+    pad = 1
+    x = torch.arange(0, size**3).reshape(size, size, size)
+    print(x)
+    chunks = x.chunk(shift_size, 1)
+    print(chunks)
+    x_shift = [torch.roll(x_c, shift, 2) for x_c, shift in zip(chunks, range(-pad, pad + 1))]
+    print(x_shift)

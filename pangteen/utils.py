@@ -45,12 +45,13 @@ def copy_properties(new_image, old_image):
     new_image.SetDirection(old_image.GetDirection())
 
 
-def read_image(path, name=None) -> tuple[Image, ndarray, ndarray[Any, dtype[Any]]]:
+def read_image(path, name=None, transpose=True) -> tuple[Image, ndarray, ndarray[Any, dtype[Any]]]:
     file_path = path if name is None else os.path.join(path, name)
     if os.path.isfile(file_path):
         image = silk.ReadImage(file_path)
         array = silk.GetArrayFromImage(image)  # numpy
-        array = array.transpose([2, 1, 0])
+        if transpose:
+            array = array.transpose([2, 1, 0])
         return image, array, np.array([image.GetSpacing()[0], image.GetSpacing()[1], image.GetSpacing()[2]]).astype(
             float)
 

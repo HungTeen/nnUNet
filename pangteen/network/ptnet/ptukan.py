@@ -11,9 +11,9 @@ from pangteen.network.common import helper
 from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.ptnet.conv_blocks import BasicConvBlock, MultiBasicConvBlock
 from pangteen.network.ptnet.fushion_blocks import SelectiveFusionBlock
+from pangteen.network.ptnet.kan_blocks import PatchEmbed, KANBlock
 from pangteen.network.ptnet.ptnet import PangTeenNet
 from pangteen.network.ptnet.transformer_blocks import TransformerBlock
-from pangteen.network.ptnet.ukan import PatchEmbed, KANBlock
 
 
 class UKANDownSampleBlock(nn.Module):

@@ -7,11 +7,13 @@ from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.dropout import _DropoutNd
 
 from pangteen.network.common import helper
-from pangteen.network.common.kan import KANLinear
 from pangteen.network.km_unet.block import SS2D, EMA
+from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.ptnet.conv_blocks import BasicConvBlock
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import math
+
+from pangteen.network.ptnet.kan_blocks import KANBlock
 
 
 class PatchEmbed(nn.Module):
@@ -60,99 +62,6 @@ class PatchEmbed(nn.Module):
         x = self.norm(x)
 
         return x, size
-
-
-class KANBlock(nn.Module):
-    def __init__(self,
-                 in_features,
-                 conv_op: Type[_ConvNd],
-                 hidden_features=None,
-                 out_features=None,
-                 norm_layer=nn.LayerNorm,
-                 drop=0.,
-                 drop_path=0.,
-                 no_kan=False,
-                 layer_count=3,
-                 norm_op: Union[None, Type[nn.Module]] = None,
-                 norm_op_kwargs: dict = None,
-                 nonlin: Union[None, Type[torch.nn.Module]] = None,
-                 nonlin_kwargs: dict = None,
-                 grid_size=5,
-                 spline_order=3,
-                 scale_noise=0.1,
-                 scale_base=1.0,
-                 scale_spline=1.0,
-                 base_activation=torch.nn.SiLU,
-                 grid_eps=0.02,
-                 grid_range=[-1, 1],
-        ):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.dim = in_features
-        self.layers = nn.ModuleList()
-        if not no_kan:
-            self.layers.append(KANLinear(
-                in_features, hidden_features,
-                grid_size=grid_size, spline_order=spline_order,
-                scale_noise=scale_noise, scale_base=scale_base, scale_spline=scale_spline,
-                base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range,
-            ))
-            for _ in range(layer_count - 1):
-                self.layers.append(KANLinear(
-                    hidden_features, out_features,
-                    grid_size=grid_size, spline_order=spline_order,
-                    scale_noise=scale_noise, scale_base=scale_base, scale_spline=scale_spline,
-                    base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range,
-                ))
-        else:
-            self.layers.append(nn.Linear(in_features, hidden_features))
-            for _ in range(layer_count - 1):
-                self.layers.append(nn.Linear(hidden_features, out_features))
-
-        self.conv_blocks = nn.ModuleList([BasicConvBlock(
-            input_channels=hidden_features, output_channels=hidden_features,
-            conv_op=conv_op, kernel_size=3, stride=1, conv_bias=True, conv_group=hidden_features,
-            norm_op = norm_op, norm_op_kwargs = norm_op_kwargs,
-            nonlin=nonlin, nonlin_kwargs=nonlin_kwargs,
-        ) for _ in range(layer_count)])
-
-        self.first_norm = norm_layer(in_features)
-        # self.drop = nn.Dropout(drop)
-        self.last_drop = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
-        self.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-        elif isinstance(m, nn.Conv2d):
-            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
-
-    def forward(self, x, patch):
-        B, N, C = x.shape
-        residual = x
-        x = self.first_norm(x)  # B, N, C
-        for layer, conv in zip(self.layers, self.conv_blocks):
-            x = layer(x.reshape(B * N, C))
-            x = x.reshape(B, N, C).contiguous()
-            x = x.reshape(B, *patch, C)  # B, N, C -> B, H, W, D, C
-            x = helper.channel_to_the_second(x)  # B, C, H, W, D
-            x = conv(x)
-            x = x.flatten(2).transpose(1, 2)  # B, C, H, W, D -> B, N, C
-
-        x = self.last_drop(x)
-
-        return x + residual
 
 
 class UKAN_3D(nn.Module):
@@ -345,27 +254,29 @@ if __name__ == "__main__":
         kan_layer_num=2
     ).cuda()
 
-    x = torch.zeros((2, 1, 64, 128, 128), requires_grad=True).cuda()
-    y = torch.rand((2, 2, 64, 128, 128), requires_grad=False).cuda()
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
 
-    with torch.autocast(device_type='cuda', enabled=True):
-        pred = network(x)
-        print(pred.size())
-
-        loss = F.cross_entropy(pred, y.argmax(1))
-        loss.backward()
-
-        print(loss)
-
-        # 检查梯度
-        for name, param in network.named_parameters():
-            if param.grad is None:
-                print(f"No gradient for {name}")
-            else:
-                print(f"Gradient for {name}: {param.grad.abs().mean()}")
-
-
-    def count_parameters(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-    print(count_parameters(network))
+    # x = torch.zeros((2, 1, 64, 128, 128), requires_grad=True).cuda()
+    # y = torch.rand((2, 2, 64, 128, 128), requires_grad=False).cuda()
+    #
+    # with torch.autocast(device_type='cuda', enabled=True):
+    #     pred = network(x)
+    #     print(pred.size())
+    #
+    #     loss = F.cross_entropy(pred, y.argmax(1))
+    #     loss.backward()
+    #
+    #     print(loss)
+    #
+    #     # 检查梯度
+    #     for name, param in network.named_parameters():
+    #         if param.grad is None:
+    #             print(f"No gradient for {name}")
+    #         else:
+    #             print(f"Gradient for {name}: {param.grad.abs().mean()}")
+    #
+    #
+    # def count_parameters(model):
+    #     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    #
+    # print(count_parameters(network))

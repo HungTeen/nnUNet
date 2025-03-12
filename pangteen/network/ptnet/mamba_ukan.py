@@ -9,12 +9,12 @@ from pangteen.network import cfg
 from pangteen.network.common import helper
 from pangteen.network.network_analyzer import NetworkAnalyzer
 from pangteen.network.ptnet.conv_blocks import MultiBasicConvBlock, BasicConvBlock, UpSampleBlock, GSC, DownSampleBlock, \
-    UXConvBlock
+    UXConvBlock, MetaNeXtBlock, InceptionDWConv
 from pangteen.network.ptnet.fushion_blocks import SelectiveFusionBlock, MultiScaleFusionBlock
 from pangteen.network.ptnet.mamba_blocks import MambaLayer
 from pangteen.network.ptnet.nnunet import nnUNet
 from pangteen.network.ptnet.ptnet import PangTeenNet
-from pangteen.network.ptnet.ptresunet import SkipResBlock
+from pangteen.network.ptnet.ptresunet import SkipResBlock, MultiResBlock
 from pangteen.network.ptnet.ptukan import EmptyBlock, UKANEncoderBlock, UKANDownSampleBlock, UKANDecoderBlock, \
     UKANUpSampleBlock
 from pangteen.network.ptnet.transformer_blocks import TransformerBlock
@@ -47,7 +47,7 @@ class MambaUKan(PangTeenNet):
                  decoder_types: list = ['Conv', 'Conv', 'Conv', 'Conv', 'Conv', 'Conv'],
                  spatial_dim: int = 3,
                  feature_channels=[32, 64, 128, 256, 320, 320],
-                 res_path_count: Optional[List] = None, #[4, 3, 2, 1],
+                 res_path_count: Optional[List] = None,  # [4, 3, 2, 1],
                  no_kan=False,
                  drop_rate=0.,
                  drop_path_rate=0.,
@@ -59,8 +59,11 @@ class MambaUKan(PangTeenNet):
                  down_sample_first=False,
                  patch_size=(128, 128, 128),
                  proj_size=[64, 64, 64, 32, 32, 32],
+                 mlp_ratio=[4, 3, 3, 2, 1, 1],
                  upsample_last=False,
                  skip_fusion=False,
+                 tri_orientation=False,
+                 use_max=False,
                  **invalid_args,
                  ):
         """
@@ -89,7 +92,8 @@ class MambaUKan(PangTeenNet):
         assert len(encoder_types) == n_stages, "The number of encoder_types and n_stages must be the same."
         assert len(decoder_types) == n_stages, "The number of decoder_types and n_stages must be the same."
         assert len(block_depths) == n_stages, "The number of block_depths and n_stages must be the same."
-        assert res_path_count is None or len(res_path_count) == n_stages - 1, "The number of res_path_count must be n_stages - 1."
+        assert res_path_count is None or len(
+            res_path_count) == n_stages - 1, "The number of res_path_count must be n_stages - 1."
         assert select_fusion ^ (skip_merge_type is not None), "select_fusion and skip_merge_type must be exclusive."
 
         self.pool_op = helper.get_matching_pool_op(dimension=self.spatial_dim, pool_type='max')
@@ -151,11 +155,37 @@ class MambaUKan(PangTeenNet):
                     conv_op, in_chans, feature_channels[s], kernel_sizes[s], strides[s],
                     conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs, pool
                 ))
+            elif encoder_types[s] == 'Res':
+                self.encoder_layers.append(MultiResBlock(
+                    conv_op, in_chans, feature_channels[s], conv_bias=conv_bias,
+                    norm_op=norm_op, norm_op_kwargs=norm_op_kwargs, dropout_op=dropout_op,
+                    dropout_op_kwargs=dropout_op_kwargs,
+                    nonlin=nonlin, nonlin_kwargs=nonlin_kwargs
+                ))
+                self.down_sample_blocks.append(DownSampleBlock(
+                    conv_op, feature_channels[s], feature_channels[s], kernel_sizes[s], strides[s],
+                    conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs, pool
+                ))
             elif encoder_types[s] == 'EPA':
                 assert self.down_sample_first, "MChannel only supports down_sample_first."
                 self.encoder_layers.append(nn.Sequential(*[
                     TransformerBlock(input_size, feature_channels[s], proj_size[s], 4, pos_embed=True)
-                for _ in range(block_depths[s])]))
+                    for _ in range(block_depths[s])]))
+                self.down_sample_blocks.append(DownSampleBlock(
+                    conv_op, in_chans, feature_channels[s], kernel_sizes[s], strides[s],
+                    conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs, pool
+                ))
+            elif encoder_types[s] == 'XT':
+                assert self.down_sample_first, "XT only supports down_sample_first."
+                self.encoder_layers.append(nn.Sequential(*[MetaNeXtBlock(
+                    dim=feature_channels[s],
+                    out_dim=feature_channels[s],
+                    token_mixer=InceptionDWConv,
+                    norm_layer=norm_op,
+                    norm_op_kwargs=norm_op_kwargs,
+                    mlp_ratio=mlp_ratio[s],
+                    drop_path=self.dpr[s],
+                ) for _ in range(n_conv_per_stage[s])]))
                 self.down_sample_blocks.append(DownSampleBlock(
                     conv_op, in_chans, feature_channels[s], kernel_sizes[s], strides[s],
                     conv_bias, norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs, pool
@@ -169,7 +199,8 @@ class MambaUKan(PangTeenNet):
         for s in range(self.n_stages - 1):
             input_size = input_size // (strides[s][0] * strides[s][1] * strides[s][2])
             if select_fusion:
-                self.skip_merge_blocks.append(SelectiveFusionBlock(feature_channels[s], conv_op, 'mlp'))
+                self.skip_merge_blocks.append(
+                    SelectiveFusionBlock(feature_channels[s], conv_op, 'mlp', use_max=use_max))
 
             if res_path_count:
                 self.skip_layers.append(nn.Sequential(*[
@@ -211,7 +242,8 @@ class MambaUKan(PangTeenNet):
                 ))
             elif encoder_types[s] == 'Conv':
                 self.decoder_layers.append(MultiBasicConvBlock(
-                    n_conv_per_stage_decoder[s], input_channels=feature_channels[s] * concat_multiplier, output_channels=feature_channels[s],
+                    n_conv_per_stage_decoder[s], input_channels=feature_channels[s] * concat_multiplier,
+                    output_channels=feature_channels[s],
                     conv_op=conv_op, kernel_size=3, stride=1,
                     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs
                 ))
@@ -225,10 +257,33 @@ class MambaUKan(PangTeenNet):
                 self.up_sample_blocks.append(UpSampleBlock(
                     conv_op, feature_channels[s + 1], feature_channels[s], strides[s + 1], conv_bias
                 ))
+            elif encoder_types[s] == 'Res':
+                self.decoder_layers.append(MultiResBlock(
+                    conv_op, feature_channels[s] * concat_multiplier, feature_channels[s], conv_bias=conv_bias,
+                    norm_op=norm_op, norm_op_kwargs=norm_op_kwargs, dropout_op=dropout_op,
+                    dropout_op_kwargs=dropout_op_kwargs,
+                    nonlin=nonlin, nonlin_kwargs=nonlin_kwargs
+                ))
+                self.up_sample_blocks.append(UpSampleBlock(
+                    conv_op, feature_channels[s + 1], feature_channels[s], strides[s + 1], conv_bias
+                ))
             elif encoder_types[s] == 'EPA':
                 self.decoder_layers.append(nn.Sequential(*[
                     TransformerBlock(input_size, feature_channels[s], proj_size[s], 4, pos_embed=True)
-                for _ in range(block_depths[s])]))
+                    for _ in range(block_depths[s])]))
+                self.up_sample_blocks.append(UpSampleBlock(
+                    conv_op, feature_channels[s + 1], feature_channels[s], strides[s + 1], conv_bias
+                ))
+            elif encoder_types[s] == 'XT':
+                self.decoder_layers.append(nn.Sequential(*[MetaNeXtBlock(
+                    dim=feature_channels[s] * concat_multiplier,
+                    out_dim=feature_channels[s],
+                    token_mixer=InceptionDWConv,
+                    norm_layer=norm_op,
+                    norm_op_kwargs=norm_op_kwargs,
+                    mlp_ratio=mlp_ratio[s],
+                    drop_path=self.dpr[s],
+                ) for _ in range(n_conv_per_stage_decoder[s])]))
                 self.up_sample_blocks.append(UpSampleBlock(
                     conv_op, feature_channels[s + 1], feature_channels[s], strides[s + 1], conv_bias
                 ))
@@ -255,10 +310,12 @@ class MambaUKan(PangTeenNet):
 
             if skip_fusion:
                 self.skip_fusion_block = MultiScaleFusionBlock(
-                    feature_channels[:-1], conv_op, norm_op, norm_op_kwargs, nonlin, nonlin_kwargs, norm_layer, drop_rate, use_mamba_v2=use_mambav2
+                    feature_channels[:-1], conv_op, norm_op, nonlin, nonlin_kwargs, norm_layer,
+                    use_mamba_v2=use_mambav2, tri_orientation=tri_orientation
                 )
 
         self.bottle_neck = None
+
 
 def analyze_mamba_ukan_count(mamba_count=3, kan_count=2):
     type_list = ['MChannel'] * mamba_count + ['KAN'] * kan_count
@@ -270,5 +327,73 @@ def analyze_mamba_ukan_count(mamba_count=3, kan_count=2):
 
     NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
 
+
+def analyze_xt_count():
+    type_list = ['XT'] * 6
+    network = MambaUKan(
+        encoder_types=type_list,
+        decoder_types=type_list,
+        down_sample_first=True,
+        **cfg.default_network_args
+    ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
+
+
+def analyze_nnunet():
+    type_list = ['Conv'] * 6
+    network = MambaUKan(
+        encoder_types=type_list,
+        decoder_types=type_list,
+        **cfg.default_network_args
+    ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
+
+
+def analyze_multi_resunet():
+    type_list = ['Res'] * 5
+    network = MambaUKan(
+        encoder_types=type_list,
+        decoder_types=type_list,
+        select_fusion=True,
+        skip_merge_type=None,
+        res_path_count=[4, 3, 2, 1],
+        **cfg.stage5_network_args
+    ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
+
+def analyze_ukan():
+    type_list = ['Conv'] * 3 + ['KAN'] * 2
+    network = MambaUKan(
+        encoder_types=type_list,
+        decoder_types=type_list,
+        **cfg.stage5_network_args
+    ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
+
+
+def analyze_mine():
+    type_list = ['XT'] * 4 + ['KAN'] * 2
+    network = MambaUKan(
+        encoder_types=type_list,
+        decoder_types=type_list,
+        down_sample_first=True,
+        select_fusion=True,
+        skip_merge_type=None,
+        skip_fusion=True,
+        **cfg.default_network_args
+    ).cuda()
+
+    NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
+
 if __name__ == "__main__":
-    analyze_mamba_ukan_count(3, 2)
+    # analyze_nnunet()
+    # analyze_multi_resunet()
+    # analyze_ukan()
+    analyze_mine()
+    # analyze_mamba_ukan_count(3, 2)
+    # analyze_xt_count()
+    pass
