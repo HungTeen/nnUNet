@@ -1,3 +1,5 @@
+import os.path
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
@@ -5,17 +7,7 @@ import matplotlib.font_manager as fm
 plt.rcParams['font.family'] = 'SimHei'  # 若使用 Linux 系统，可尝试 'WenQuanYi Zen Hei'
 
 
-def plot_module_ablation_bar():
-    data = {
-            '指标': ['肝脏', '肿瘤', '平均'],
-            'B': [0.918, 0.536, 0.727],
-            'B+M': [0.92, 0.61, 0.765],
-            'B+M+I': [0.925, 0.64, 0.783],
-            'B+M+I+K': [0.94, 0.674, 0.807],
-            'B+M+I+K+C': [0.949, 0.685, 0.817],
-            'B+M+I+K+C+L': [0.948, 0.726, 0.837],
-    }
-
+def plot_comparison_bar(data: dict, title: str, png_name: str, detail=False):
     df = pd.DataFrame(data).set_index('指标')
     bar_df = df.T
 
@@ -37,14 +29,22 @@ def plot_module_ablation_bar():
                        ha='center')  # 重要：强制居中对齐
 
     # 其余配置（保持不变）
-    plt.title('模块消融实验结果', fontsize=10, pad=20)
+    plt.title(title, fontsize=10, pad=20)
     # plt.xlabel('Model Variants', fontsize=12)
     plt.ylabel('Dice', fontsize=10)
     plt.ylim(0.5, 1.0)
 
     # 添加数据标签
     for p in ax.patches:
-        ax.annotate(f"{p.get_height():.2f}",
+        if detail:
+            ax.annotate(f"{p.get_height():.3f}",
+                        (p.get_x() + p.get_width() / 2., p.get_height()),
+                        ha='center', va='center',
+                        xytext=(0, 5),
+                        textcoords='offset points',
+                        fontsize=7)
+        else:
+            ax.annotate(f"{p.get_height():.2f}",
                     (p.get_x() + p.get_width() / 2., p.get_height()),
                     ha='center', va='center',
                     xytext=(0, 5),
@@ -55,48 +55,10 @@ def plot_module_ablation_bar():
     plt.grid(axis='y', linestyle='--', alpha=0.7)
 
     plt.tight_layout()
-    plt.savefig('ablation_results.png', dpi=300, bbox_inches='tight')
+    save_path = os.path.abspath('E:\Study\研究生\矢量图')
+    plt.savefig(os.path.join(save_path, png_name), dpi=300, bbox_inches='tight')
     plt.show()
 
-
-def plot():
-    # 定义数据
-    data = {
-        '指标': ['Dice', 'IOU', 'HD95', 'Precision', 'Recall', 'ASSD'],
-        'liver': [0.95, 0.907, 14.125, 0.946, 0.957, 3.346],
-        'tumor': [0.659, 0.54, 40.939, 0.726, 0.679, 8.867],
-        '平均': [0.804, 0.724, 27.532, 0.836, 0.818, 6.107],
-        '最佳': [0.985, 0.972, 1.225, 0.994, 0.977, 0.575],
-        '最差': [0.491, 0.48, 115.954, 0.492, 0.492, 20.275],
-        '75分位': [0.893, 0.814, 5.012, 0.913, 0.924, 2.199],
-        '25分位': [0.744, 0.641, 39.714, 0.783, 0.766, 7.293]
-    }
-
-    # 创建 DataFrame
-    df = pd.DataFrame(data)
-    # 将 '指标' 列设置为索引
-    df.set_index('指标', inplace=True)
-
-    # 绘制肝脏和肿瘤各指标得分柱状图
-    bar_df = df[['liver', 'tumor']]
-    bar_df.plot(kind='bar', figsize=(10, 6))
-    plt.title('肝脏和肿瘤各指标得分对比')
-    plt.xlabel('指标')
-    plt.ylabel('得分')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
-    # 绘制各项指标的统计信息箱线图
-    box_df = df.drop(['liver', 'tumor'], axis=1)
-    box_df = box_df.T
-    box_df.plot(kind='box', figsize=(10, 6))
-    plt.title('各项指标的统计信息箱线图')
-    plt.xlabel('指标')
-    plt.ylabel('得分')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
 
 def plot_radar():
     import numpy as np
@@ -128,5 +90,19 @@ def plot_radar():
 if __name__ == '__main__':
     # plot()
     # plot_radar()
-    plot_module_ablation_bar()
+    plot_comparison_bar(data = {
+            '指标': ['肝脏', '肿瘤', '平均'],
+            'B': [0.917, 0.579, 0.748],
+            'B+M': [0.92, 0.67, 0.795],
+            'B+M+I': [0.927, 0.701, 0.814],
+            'B+M+I+K': [0.941, 0.75, 0.846],
+            'B+M+I+K+C': [0.936, 0.777, 0.857],
+    }, title='模块消融实验结果', png_name='ablation_module.png')
+    plot_comparison_bar(data={
+        '指标': ['肝脏', '肿瘤', '平均'],
+        'Layer 1': [0.93, 0.738, 0.834],
+        'Layer 2': [0.936, 0.777, 0.857],
+        'Layer 3': [0.937, 0.766, 0.852],
+        'Layer 4': [0.932, 0.758, 0.845],
+    }, title='Shifted KAN 模块消融', png_name='ablation_layer.png', detail=True)
     pass

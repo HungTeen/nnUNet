@@ -14,7 +14,7 @@ from pangteen.network.ptnet.sfunet import SFUNet
 from pangteen.trainer.trainers import HTTrainer
 
 class PangTeenTrainer(HTTrainer):
-    """
+    """ M I C K
     A: KAN | B: SF | C: Mamba | D: ResPath | E: GSC | F: EPA | G: MF | T: XT
     """
 

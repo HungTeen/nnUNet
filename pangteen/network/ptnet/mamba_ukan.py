@@ -375,8 +375,8 @@ def analyze_ukan():
     NetworkAnalyzer(network, print_flops=True, test_backward=True).analyze()
 
 
-def analyze_mine():
-    type_list = ['XT'] * 4 + ['KAN'] * 2
+def analyze_mine(xt_cnt, kan_cnt):
+    type_list = ['XT'] * xt_cnt + ['KAN'] * kan_cnt
     network = MambaUKan(
         encoder_types=type_list,
         decoder_types=type_list,
@@ -393,7 +393,7 @@ if __name__ == "__main__":
     # analyze_nnunet()
     # analyze_multi_resunet()
     # analyze_ukan()
-    analyze_mine()
+    analyze_mine(xt_cnt=3, kan_cnt=3)
     # analyze_mamba_ukan_count(3, 2)
     # analyze_xt_count()
     pass

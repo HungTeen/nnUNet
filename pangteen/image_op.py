@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import SimpleITK as sitk
 from pangteen import utils
 
-def visualize_and_save(ct_path, label_path, case_name, output_path, output_name, slice_index=None):
+def visualize_and_save(ct_path, label_path, case_name, output_path, output_name, slice_index=None, revert_y=False, revert_x=False):
     # 读取 CT 图像和标签图像
     ct_image, ct_array, _ = utils.read_image(ct_path, case_name, transpose=False)
     if label_path is not None:
@@ -40,6 +40,10 @@ def visualize_and_save(ct_path, label_path, case_name, output_path, output_name,
     combined = (1 - alpha) * ct_rgb + alpha * overlay
 
     # 显示叠加后的图像
+    if revert_y:
+        combined = np.flip(combined, axis=0)
+    if revert_x:
+        combined = np.flip(combined, axis=1)
     plt.imshow(combined)
     plt.axis('off')
 
@@ -48,25 +52,53 @@ def visualize_and_save(ct_path, label_path, case_name, output_path, output_name,
     plt.close()
 
 
-def cut_cmp_image_and_label(cmp_id_map: dict, size=(400, 512)):
+def cut_cmp_image_and_label(cmp_id_map: dict, revert_y_list=None, revert_x_list=None):
     ct_path = os.path.abspath('E:\Study\LiTS\cut_liver_image')
     gt_path = os.path.abspath('E:\Study\LiTS\cut_liver_label')
-    cmp_path = os.path.abspath('E:\Study\LiTS\predict')
+    cmp_path = os.path.abspath('E:\Study\LiTS\predict\cmp')
     output_path = os.path.abspath('E:\Study\研究生\截图\cmp')
 
     for case_id, case_slice in cmp_id_map.items():
         case_filename = f'liver_{case_id:03d}.nii.gz'
         ct_name = f'ct_{case_id:03d}.png'
         gt_name = f'gt_{case_id:03d}.png'
-        visualize_and_save(ct_path, None, case_filename, output_path, ct_name, slice_index=case_slice)
-        visualize_and_save(ct_path, gt_path, case_filename, output_path, gt_name, slice_index=case_slice)
+        revert_y = True if revert_y_list is not None and case_id in revert_y_list else False
+        revert_x = True if revert_x_list is not None and case_id in revert_x_list else False
+        visualize_and_save(ct_path, None, case_filename, output_path, ct_name, slice_index=case_slice, revert_y=revert_y, revert_x=revert_x)
+        visualize_and_save(ct_path, gt_path, case_filename, output_path, gt_name, slice_index=case_slice, revert_y=revert_y, revert_x=revert_x)
         for cmp_folder_name in os.listdir(cmp_path):
             cmp_predict_path = os.path.join(cmp_path, cmp_folder_name, 'fold_[0]')
             model_name = cmp_folder_name.split('_')[0].replace('Trainer', '')
             output_name = f'{model_name}_{case_id:03d}.png'
-            visualize_and_save(ct_path, cmp_predict_path, case_filename, output_path, output_name, slice_index=case_slice)
+            visualize_and_save(ct_path, cmp_predict_path, case_filename, output_path, output_name, slice_index=case_slice, revert_y=revert_y, revert_x=revert_x)
+            # break
+        print(f"Cut case {case_id} done.")
+
+def cut_ablation_image_and_label(cmp_id_map: dict, revert_y_list=None, revert_x_list=None):
+    ct_path = os.path.abspath('E:\Study\LiTS\cut_liver_image')
+    gt_path = os.path.abspath('E:\Study\LiTS\cut_liver_label')
+    cmp_path = os.path.abspath('E:\Study\LiTS\predict\\ablation')
+    output_path = os.path.abspath('E:\Study\研究生\截图\\ablation')
+
+    for case_id, case_slice in cmp_id_map.items():
+        case_filename = f'liver_{case_id:03d}.nii.gz'
+        ct_name = f'ct_{case_id:03d}.png'
+        gt_name = f'gt_{case_id:03d}.png'
+        revert_y = True if revert_y_list is not None and case_id in revert_y_list else False
+        revert_x = True if revert_x_list is not None and case_id in revert_x_list else False
+        visualize_and_save(ct_path, None, case_filename, output_path, ct_name, slice_index=case_slice,
+                           revert_y=revert_y, revert_x=revert_x)
+        visualize_and_save(ct_path, gt_path, case_filename, output_path, gt_name, slice_index=case_slice,
+                           revert_y=revert_y, revert_x=revert_x)
+        for cmp_folder_name in os.listdir(cmp_path):
+            cmp_predict_path = os.path.join(cmp_path, cmp_folder_name, 'fold_[0]')
+            model_name = cmp_folder_name.split('_')[0].replace('Trainer', '')
+            output_name = f'{model_name}_{case_id:03d}.png'
+            visualize_and_save(ct_path, cmp_predict_path, case_filename, output_path, output_name,
+                               slice_index=case_slice, revert_y=revert_y, revert_x=revert_x)
             # break
 
+        print(f"Cut case {case_id} done.")
 
 def cut_image(path, target_path, size=(400, 512)):
     """
@@ -105,16 +137,16 @@ def cut_image(path, target_path, size=(400, 512)):
 
 if __name__ == '__main__':
     # cut_image('E:\Study\研究生\截图\cmp', 'E:\Study\研究生\截图\cut_cmp')
-    cut_cmp_image_and_label({
-        22: 200,
-        36: 36,
-        38: 96,
-        83: 251
-    })
-    # 使用示例
-    # ct_path = 'E:\Study\LiTS\cut_liver_image\liver_001.nii.gz'
-    # label_path = 'E:\Study\LiTS\cut_liver_label\liver_001.nii.gz'
-    # output_path = 'E:\Study\研究生\截图\cmp\output_image.png'
-    #
-    # visualize_and_save(ct_path, label_path, output_path)
+    # cut_cmp_image_and_label({
+    #     22: 200,
+    #     36: 36,
+    #     38: 96,
+    #     83: 251
+    # }, revert_y_list=[22, 36, 38])
+    cut_ablation_image_and_label({
+        20: 212,
+        75: 205,
+        83: 251,
+        113: 191
+    }, revert_y_list=[20, 75], revert_x_list=[75])
     pass

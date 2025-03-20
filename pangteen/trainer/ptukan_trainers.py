@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
+from pangteen.loss.combine_loss import DC_and_CE_and_Focal_loss
 from pangteen.loss.uumamba import AutoWeighted_DC_and_CE_and_Focal_loss, AutoWeighted_DC_and_CE_loss
 from pangteen.network.ptnet.mamba_ukan import MambaUKan
 from pangteen.network.ptnet.ptukan import UKAN_3D, SFUKAN_3D
@@ -41,7 +42,6 @@ class PTUKanTrainer(HTTrainer):
             encoder_types=['Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
             decoder_types=['Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
             down_sample_first=True,
-            mamba_count=1,
             **architecture_kwargs
         )
 
@@ -520,7 +520,45 @@ class MambaXTUKanTrainer(PTUKanTrainer):
         network = MambaUKan(
             encoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
             decoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
+            skip_fusion=True,
+            down_sample_first=True,
+            **architecture_kwargs
+        )
+
+        if hasattr(network, 'initialize'):
+            network.apply(network.initialize)
+
+        return network
+
+class SFUKanL1Trainer(PTUKanTrainer):
+    """
+    三层 KAN。
+    """
+
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
+                 device: torch.device = torch.device('cuda')):
+        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
+        self.num_epochs = 500
+        self.initial_lr = 1e-2
+
+    @staticmethod
+    def build_network_architecture(architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True) -> nn.Module:
+        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
+                                                            num_input_channels, num_output_channels,
+                                                            enable_deep_supervision,
+                                                            print_args=True)
+
+        network = MambaUKan(
+            encoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'Conv', 'KAN'],
+            decoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'Conv', 'KAN'],
             select_fusion=True,
+            skip_merge_type=None,
+            use_max=True,
             **architecture_kwargs
         )
 
@@ -556,6 +594,44 @@ class SFUKanL3Trainer(PTUKanTrainer):
         network = MambaUKan(
             encoder_types=['Conv', 'Conv', 'Conv', 'KAN', 'KAN', 'KAN'],
             decoder_types=['Conv', 'Conv', 'Conv', 'KAN', 'KAN', 'KAN'],
+            select_fusion=True,
+            skip_merge_type=None,
+            use_max=True,
+            **architecture_kwargs
+        )
+
+        if hasattr(network, 'initialize'):
+            network.apply(network.initialize)
+
+        return network
+
+
+class SFUKanL4Trainer(PTUKanTrainer):
+    """
+    4 层 KAN。
+    """
+
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
+                 device: torch.device = torch.device('cuda')):
+        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
+        self.num_epochs = 500
+        self.initial_lr = 1e-2
+
+    @staticmethod
+    def build_network_architecture(architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True) -> nn.Module:
+        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
+                                                            num_input_channels, num_output_channels,
+                                                            enable_deep_supervision,
+                                                            print_args=True)
+
+        network = MambaUKan(
+            encoder_types=['Conv', 'Conv', 'KAN', 'KAN', 'KAN', 'KAN'],
+            decoder_types=['Conv', 'Conv', 'KAN', 'KAN', 'KAN', 'KAN'],
             select_fusion=True,
             skip_merge_type=None,
             use_max=True,

@@ -47,7 +47,7 @@ class MetricManager:
         self.metric_count = len(self.metric_funcs)
         self.summary_rows = len(self.summary_row_titles)
         self.round_limit = 3
-        self.abandon_limit = 4
+        self.abandon_limit = 10
 
         self.predict_result_folder = result_folder
 
