@@ -1,11 +1,3 @@
-# -*- encoding: utf-8 -*-
-"""
-@author   :   yykzjh
-@Contact  :   yykzhjh@163.com
-@DateTime :   2022/12/5 23:25
-@Version  :   1.0
-@License  :   (C)Copyright 2022
-"""
 import os
 import sys
 
@@ -162,10 +154,10 @@ class DepthWiseSeparateConvBlock(nn.Module):
         return self.conv(x)
 
 
-class DenseFeatureStackWithLocalPMFSBlock(nn.Module):
+class DenseFeatureStackWithLocalBlock(nn.Module):
 
     def __init__(self, in_channel, kernel_size, unit, growth_rate, dim="3d"):
-        super(DenseFeatureStackWithLocalPMFSBlock, self).__init__()
+        super(DenseFeatureStackWithLocalBlock, self).__init__()
 
         self.conv_units = torch.nn.ModuleList()
         for i in range(unit):
@@ -198,10 +190,10 @@ class DenseFeatureStackWithLocalPMFSBlock(nn.Module):
 
         return torch.cat([x, stack_feature], dim=1)
 
-class DownSampleWithLocalPMFSBlock(nn.Module):
+class DownSampleWithLocalBlock(nn.Module):
 
     def __init__(self, in_channel, base_channel, kernel_size, unit, growth_rate, skip_channel=None, downsample=True, skip=True, dim="3d"):
-        super(DownSampleWithLocalPMFSBlock, self).__init__()
+        super(DownSampleWithLocalBlock, self).__init__()
         self.skip = skip
 
         self.downsample = ConvBlock(
@@ -214,7 +206,7 @@ class DownSampleWithLocalPMFSBlock(nn.Module):
             dim=dim
         )
 
-        self.dfs_with_pmfs = DenseFeatureStackWithLocalPMFSBlock(
+        self.dfs_with_pmfs = DenseFeatureStackWithLocalBlock(
             in_channel=base_channel,
             kernel_size=3,
             unit=unit,
@@ -244,7 +236,7 @@ class DownSampleWithLocalPMFSBlock(nn.Module):
             return x
 
 
-class GlobalPMFSBlock_AP_Separate(nn.Module):
+class GlobalBlock_AP_Separate(nn.Module):
     """
     Global polarized multi-scale feature self-attention module using global multi-scale features
     to expand the number of attention points and thus enhance features at each scale,
@@ -262,7 +254,7 @@ class GlobalPMFSBlock_AP_Separate(nn.Module):
         :param br: number of branches
         :param dim: dimension
         """
-        super(GlobalPMFSBlock_AP_Separate, self).__init__()
+        super(GlobalBlock_AP_Separate, self).__init__()
         self.ch_bottle = in_channels[-1]
         self.ch = ch
         self.ch_k = ch_k
@@ -384,14 +376,14 @@ class GlobalPMFSBlock_AP_Separate(nn.Module):
         return out
 
 
-class PMFSNet(nn.Module):
+class TDNet(nn.Module):
     """
     Reference: https://github.com/yykzjh/PMFSNet
     """
     def __init__(self, in_channels=1, out_channels=35, dim="3d", scaling_version="TINY",
-                 basic_module=DownSampleWithLocalPMFSBlock,
-                 global_module=GlobalPMFSBlock_AP_Separate):
-        super(PMFSNet, self).__init__()
+                 basic_module=DownSampleWithLocalBlock,
+                 global_module=GlobalBlock_AP_Separate):
+        super(TDNet, self).__init__()
 
         self.scaling_version = scaling_version
 
@@ -546,7 +538,7 @@ if __name__ == '__main__':
 
     for i, dim in enumerate(dims):
         for scaling_version in scaling_versions:
-            model = PMFSNet(in_channels=channels[i], out_channels=2, dim=dim, scaling_version=scaling_version).to(device)
+            model = TDNet(in_channels=channels[i], out_channels=2, dim=dim, scaling_version=scaling_version).to(device)
             y = model(xs[i])
             print(dim + "-" + scaling_version, ":")
             print(xs[i].size())

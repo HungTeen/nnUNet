@@ -87,22 +87,122 @@ def plot_radar():
     ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1))
     plt.show()
 
+
+def calculate_metrics(TP, FP, FN):
+    """
+    根据 TP、FP、FN 计算 Dice 系数、IOU、精确率和召回率
+    :param TP: 真阳性
+    :param FP: 假阳性
+    :param FN: 假阴性
+    :return: Dice 系数, IOU, 精确率, 召回率
+    """
+    dice = (2 * TP) / (2 * TP + FP + FN)
+    iou = TP / (TP + FP + FN)
+    precision = TP / (TP + FP)
+    recall = TP / (TP + FN)
+    return dice, iou, precision, recall
+
+
+def calculate_recall(dice, precision, iou):
+    """
+    根据 Dice、Precision、IOU 计算 Recall
+    :param dice: Dice 系数
+    :param precision: 精确率
+    :param iou: 交并比
+    :return: 召回率
+    """
+    recall = 1 / (1 + (1 / iou) - (1 / precision))
+    return recall
+
+def recall_from_dice_precision(dice, precision):
+    denominator = 2 * precision - dice
+    if denominator == 0:
+        return 0.0
+    recall = (dice * precision) / denominator
+    return recall
+
+def precision_from_dice_recall(dice, recall):
+    denominator = 2 * recall - dice
+    if denominator == 0:
+        return 0.0
+    precision = (dice * recall) / denominator
+    return precision
+
+def check_metrics(dice, iou, precision, recall):
+    """
+    检查 Dice、IOU、Precision 和 Recall 指标的合理性
+    :param dice: Dice 系数
+    :param iou: 交并比
+    :param precision: 精确率
+    :param recall: 召回率
+    :return: 检查结果信息
+    """
+    # 检查每个指标是否在 [0, 1] 区间内
+    metrics = {
+        'Dice': dice,
+        'IOU': iou,
+        'Precision': precision,
+        'Recall': recall
+    }
+    for metric_name, metric_value in metrics.items():
+        if metric_value < 0 or metric_value > 1:
+            return f"{metric_name} 的值 {metric_value} 不在 [0, 1] 区间内，可能有误。"
+
+    # 检查指标之间的关系
+    # 根据公式 Dice = 2 * IOU / (1 + IOU) 进行粗略检查
+    calculated_dice = 2 * iou / (1 + iou)
+    if abs(dice - calculated_dice) > 0.1:  # 允许一定的误差范围
+        return f"Dice 系数 {dice} 与根据 IOU 计算得到的近似值 {calculated_dice} 差异较大，可能有误。"
+
+    # 根据公式 Precision = 1 / (1 + (1 / IOU) - (1 / Recall)) 进行检查
+    calculated_precision = 1 / (1 + (1 / iou) - (1 / recall))
+    if abs(precision - calculated_precision) > 0.1:  # 允许一定的误差范围
+        return f"Precision {precision} 与根据 IOU 和 Recall 计算得到的近似值 {calculated_precision} 差异较大，可能有误。"
+
+    return "所有指标看起来合理。"
+
+
+
 if __name__ == '__main__':
     # plot()
     # plot_radar()
-    plot_comparison_bar(data = {
-            '指标': ['肝脏', '肿瘤', '平均'],
-            'B': [0.917, 0.579, 0.748],
-            'B+M': [0.92, 0.67, 0.795],
-            'B+M+I': [0.927, 0.701, 0.814],
-            'B+M+I+K': [0.941, 0.75, 0.846],
-            'B+M+I+K+C': [0.936, 0.777, 0.857],
-    }, title='模块消融实验结果', png_name='ablation_module.png')
-    plot_comparison_bar(data={
-        '指标': ['肝脏', '肿瘤', '平均'],
-        'Layer 1': [0.93, 0.738, 0.834],
-        'Layer 2': [0.936, 0.777, 0.857],
-        'Layer 3': [0.937, 0.766, 0.852],
-        'Layer 4': [0.932, 0.758, 0.845],
-    }, title='Shifted KAN 模块消融', png_name='ablation_layer.png', detail=True)
+    # plot_comparison_bar(data = {
+    #         '指标': ['肝脏', '肿瘤', '平均'],
+    #         'B': [0.917, 0.579, 0.748],
+    #         'B+M': [0.92, 0.67, 0.795],
+    #         'B+M+I': [0.927, 0.701, 0.814],
+    #         'B+M+I+K': [0.941, 0.75, 0.846],
+    #         'B+M+I+K+C': [0.936, 0.777, 0.857],
+    # }, title='模块消融实验结果', png_name='ablation_module.png')
+    # plot_comparison_bar(data={
+    #     '指标': ['肝脏', '肿瘤', '平均'],
+    #     'Layer 1': [0.93, 0.738, 0.834],
+    #     'Layer 2': [0.936, 0.777, 0.857],
+    #     'Layer 3': [0.937, 0.766, 0.852],
+    #     'Layer 4': [0.932, 0.758, 0.845],
+    # }, title='Shifted KAN 模块消融', png_name='ablation_layer.png', detail=True)
+
+    # 示例使用
+    # TP = 70
+    # FP = 20
+    # FN = 10
+    #
+    # dice, iou, precision, recall = calculate_metrics(TP, FP, FN)
+    # print(f"Dice 系数: {dice:.4f}")
+    # print(f"IOU: {iou:.4f}")
+    # print(f"精确率: {precision:.4f}")
+    # print(f"召回率: {recall:.4f}")
+
+    # 示例使用
+    dice = 0.777
+    iou = 0.646
+    precision = 0.797
+    recall = 0.795
+
+    result = check_metrics(dice, iou, precision, recall)
+    print(result)
+
+    precision_dice = precision_from_dice_recall(dice, recall)
+    print(f"Precision from Dice and Recall: {precision_dice:.4f}")
+
     pass

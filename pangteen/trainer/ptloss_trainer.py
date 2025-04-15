@@ -4,14 +4,16 @@ import torch
 from torch import nn
 
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
+from nnunetv2.utilities.helpers import softmax_helper_dim1
 from pangteen.loss.uumamba import AutoWeighted_DC_and_CE_and_Focal_loss, AutoWeighted_DC_and_CE_loss, \
     AutoWeighted_CE_and_Focal_loss
-from pangteen.network.ptnet.mamba_ukan import MambaUKan
+from pangteen.network.ptnet.mamba_ukan import SKIM_UNet
 from pangteen.trainer.ptukan_trainers import PTUKanTrainer
+from pangteen.trainer.skim_trainers import SKIMUNetTrainer
 from pangteen.trainer.trainers import HTTrainer
 
 
-class SFUKanWithLossTrainer(PTUKanTrainer):
+class SKIMLossTrainer(SKIMUNetTrainer):
     """
     A + B + L
     """
@@ -22,33 +24,20 @@ class SFUKanWithLossTrainer(PTUKanTrainer):
         self.num_epochs = 500
         self.initial_lr = 1e-2
 
-    @staticmethod
-    def build_network_architecture(architecture_class_name: str,
-                                   arch_init_kwargs: dict,
-                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
-                                   num_input_channels: int,
-                                   num_output_channels: int,
-                                   enable_deep_supervision: bool = True) -> nn.Module:
-        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
-                                                            num_input_channels, num_output_channels,
-                                                            enable_deep_supervision,
-                                                            print_args=True)
+class DiceTrainer(SKIMLossTrainer):
 
-        network = MambaUKan(
-            encoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
-            decoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
-            select_fusion=True,
-            skip_merge_type=None,
-            use_max=True,
-            **architecture_kwargs
-        )
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
+                     device: torch.device = torch.device('cuda')):
+        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
 
-        if hasattr(network, 'initialize'):
-            network.apply(network.initialize)
+    def configure_loss(self):
+        return MemoryEfficientSoftDiceLoss(**{'batch_dice': self.configuration_manager.batch_dice,
+                                              'do_bg': self.label_manager.has_regions, 'smooth': 1e-5,
+                                              'ddp': self.is_ddp},
+                                           apply_nonlin=torch.sigmoid if self.label_manager.has_regions else softmax_helper_dim1)
 
-        return network
 
-class DiceCEAndFocalTrainer(SFUKanWithLossTrainer):
+class DiceCEAndFocalTrainer(SKIMLossTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                      device: torch.device = torch.device('cuda')):
@@ -62,7 +51,7 @@ class DiceCEAndFocalTrainer(SFUKanWithLossTrainer):
             ignore_label=self.label_manager.ignore_label, dice_class=MemoryEfficientSoftDiceLoss)
 
 
-class DiceAndCETrainer(SFUKanWithLossTrainer):
+class DiceAndCETrainer(SKIMLossTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
@@ -76,7 +65,7 @@ class DiceAndCETrainer(SFUKanWithLossTrainer):
             dice_class=MemoryEfficientSoftDiceLoss)
 
 
-class DiceAndFocalTrainer(SFUKanWithLossTrainer):
+class DiceAndFocalTrainer(SKIMLossTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):

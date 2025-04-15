@@ -1,29 +1,24 @@
 from typing import Union, List, Tuple
 
 import torch
-from dynamic_network_architectures.architectures.unet import PlainConvUNet
 from torch import nn
 
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
-from pangteen.loss.uumamba import AutoWeighted_DC_and_CE_and_Focal_loss
+from pangteen.loss.combine_loss import DC_and_CE_and_Focal_loss
+from pangteen.loss.uumamba import AutoWeighted_DC_and_CE_and_Focal_loss, AutoWeighted_DC_and_CE_loss
 from pangteen.network.ptnet.mamba_ukan import SKIM_UNet
-from pangteen.network.ptnet.mamba_unet import MambaUNet
-from pangteen.network.ptnet.nnunet import nnUNet
-from pangteen.network.ptnet.ptunet import PangTeenUNet
-from pangteen.network.ptnet.sfunet import SFUNet
+from pangteen.network.ptnet.ptukan import UKAN_3D, SFUKAN_3D
+from pangteen.network.ukan.ukan_2d import UKAN
+from pangteen.trainer.mamba_ukan_trainers import MambaUKanTrainer
 from pangteen.trainer.trainers import HTTrainer
 
-class PangTeenTrainer(HTTrainer):
-    """ M I C K
-    A: KAN | B: SF | C: Mamba | D: ResPath | E: GSC | F: EPA | G: MF | T: XT
-    """
+class MambaFusionV1Trainer(HTTrainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 300
-        self.initial_lr = 1e-2
-        self.enable_deep_supervision = False
+        self.num_epochs = 500
+        self.initial_lr = 1e-4
 
     @staticmethod
     def build_network_architecture(architecture_class_name: str,
@@ -38,67 +33,16 @@ class PangTeenTrainer(HTTrainer):
                                                             print_args=True)
 
         network = SKIM_UNet(
-            **architecture_kwargs
-        )
-
-        if hasattr(network, 'initialize'):
-            network.apply(network.initialize)
-
-        return network
-
-class SFUNetTrainer(PangTeenTrainer):
-    """
-    B
-    """
-
-    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
-                 device: torch.device = torch.device('cuda')):
-        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-
-    @staticmethod
-    def build_network_architecture(architecture_class_name: str,
-                                   arch_init_kwargs: dict,
-                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
-                                   num_input_channels: int,
-                                   num_output_channels: int,
-                                   enable_deep_supervision: bool = True) -> nn.Module:
-        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
-                                                            num_input_channels, num_output_channels,
-                                                            enable_deep_supervision,
-                                                            print_args=True)
-
-        network = SFUNet(**architecture_kwargs)
-
-        if hasattr(network, 'initialize'):
-            network.apply(network.initialize)
-
-        return network
-
-class MambaFusionTrainer(PangTeenTrainer):
-    """
-    G
-    """
-
-    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
-                 device: torch.device = torch.device('cuda')):
-        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.initial_lr = 1e-3
-
-    @staticmethod
-    def build_network_architecture(architecture_class_name: str,
-                                   arch_init_kwargs: dict,
-                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
-                                   num_input_channels: int,
-                                   num_output_channels: int,
-                                   enable_deep_supervision: bool = True) -> nn.Module:
-        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
-                                                            num_input_channels, num_output_channels,
-                                                            enable_deep_supervision,
-                                                            print_args=True)
-
-        network = SKIM_UNet(
+            encoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
+            decoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
+            down_sample_first=True,
             skip_fusion=True,
             fusion_count=3,
+            use_shift=True,
+            no_kan=False,
+            select_fusion=True,
+            skip_merge_type=None,
+            use_max=True,
             **architecture_kwargs
         )
 
@@ -107,15 +51,12 @@ class MambaFusionTrainer(PangTeenTrainer):
 
         return network
 
-class XTUNetTrainer(PangTeenTrainer):
-    """
-    T
-    """
+
+class MambaFusionV2Trainer(MambaFusionV1Trainer):
 
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.initial_lr = 1e-3
 
     @staticmethod
     def build_network_architecture(architecture_class_name: str,
@@ -130,9 +71,56 @@ class XTUNetTrainer(PangTeenTrainer):
                                                             print_args=True)
 
         network = SKIM_UNet(
-            encoder_types=['XT', 'XT', 'XT', 'XT', 'XT', 'XT'],
-            decoder_types=['XT', 'XT', 'XT', 'XT', 'XT', 'XT'],
+            encoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
+            decoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
             down_sample_first=True,
+            skip_fusion=True,
+            res_mamba_fusion=True,
+            fusion_count=3,
+            use_shift=True,
+            no_kan=False,
+            select_fusion=True,
+            skip_merge_type=None,
+            use_max=True,
+            **architecture_kwargs
+        )
+
+        if hasattr(network, 'initialize'):
+            network.apply(network.initialize)
+
+        return network
+
+
+class MambaFusionV3Trainer(MambaFusionV1Trainer):
+
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
+                 device: torch.device = torch.device('cuda')):
+        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
+
+    @staticmethod
+    def build_network_architecture(architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True) -> nn.Module:
+        architecture_kwargs = HTTrainer.update_network_args(arch_init_kwargs, arch_init_kwargs_req_import,
+                                                            num_input_channels, num_output_channels,
+                                                            enable_deep_supervision,
+                                                            print_args=True)
+
+        network = SKIM_UNet(
+            encoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
+            decoder_types=['XT', 'XT', 'XT', 'XT', 'KAN', 'KAN'],
+            down_sample_first=True,
+            skip_fusion=True,
+            tri_orientation=True,
+            fusion_count=3,
+            use_shift=True,
+            no_kan=False,
+            select_fusion=True,
+            skip_merge_type=None,
+            use_max=True,
             **architecture_kwargs
         )
 

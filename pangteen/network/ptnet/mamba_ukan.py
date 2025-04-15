@@ -20,7 +20,7 @@ from pangteen.network.ptnet.ptukan import EmptyBlock, UKANEncoderBlock, UKANDown
 from pangteen.network.ptnet.transformer_blocks import TransformerBlock
 
 
-class MambaUKan(PangTeenNet):
+class SKIM_UNet(PangTeenNet):
     """
     PangTeen: 把 UKAN 模型改造成 3D 版本。
     """
@@ -319,7 +319,7 @@ class MambaUKan(PangTeenNet):
 
 def analyze_mamba_ukan_count(mamba_count=3, kan_count=2):
     type_list = ['MChannel'] * mamba_count + ['KAN'] * kan_count
-    network = MambaUKan(
+    network = SKIM_UNet(
         encoder_types=type_list,
         decoder_types=type_list,
         **cfg.stage5_network_args
@@ -330,7 +330,7 @@ def analyze_mamba_ukan_count(mamba_count=3, kan_count=2):
 
 def analyze_xt_count():
     type_list = ['XT'] * 6
-    network = MambaUKan(
+    network = SKIM_UNet(
         encoder_types=type_list,
         decoder_types=type_list,
         down_sample_first=True,
@@ -342,7 +342,7 @@ def analyze_xt_count():
 
 def analyze_nnunet():
     type_list = ['Conv'] * 6
-    network = MambaUKan(
+    network = SKIM_UNet(
         encoder_types=type_list,
         decoder_types=type_list,
         **cfg.default_network_args
@@ -353,7 +353,7 @@ def analyze_nnunet():
 
 def analyze_multi_resunet():
     type_list = ['Res'] * 5
-    network = MambaUKan(
+    network = SKIM_UNet(
         encoder_types=type_list,
         decoder_types=type_list,
         select_fusion=True,
@@ -366,7 +366,7 @@ def analyze_multi_resunet():
 
 def analyze_ukan():
     type_list = ['Conv'] * 3 + ['KAN'] * 2
-    network = MambaUKan(
+    network = SKIM_UNet(
         encoder_types=type_list,
         decoder_types=type_list,
         **cfg.stage5_network_args
@@ -377,7 +377,7 @@ def analyze_ukan():
 
 def analyze_mine(xt_cnt, kan_cnt):
     type_list = ['XT'] * xt_cnt + ['KAN'] * kan_cnt
-    network = MambaUKan(
+    network = SKIM_UNet(
         encoder_types=type_list,
         decoder_types=type_list,
         down_sample_first=True,

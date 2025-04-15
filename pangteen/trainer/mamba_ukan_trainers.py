@@ -5,7 +5,7 @@ from torch import nn
 
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
 from pangteen.loss.uumamba import AutoWeighted_DC_and_CE_and_Focal_loss, AutoWeighted_DC_and_CE_loss
-from pangteen.network.ptnet.mamba_ukan import MambaUKan
+from pangteen.network.ptnet.mamba_ukan import SKIM_UNet
 from pangteen.network.ptnet.ptukan import UKAN_3D, SFUKAN_3D
 from pangteen.network.ukan.ukan_2d import UKAN
 from pangteen.trainer.trainers import HTTrainer
@@ -37,7 +37,7 @@ class MambaUKanTrainer(HTTrainer):
                                                             n_stages=5,
                                                             print_args=True)
 
-        network = MambaUKan(
+        network = SKIM_UNet(
             encoder_types=['Conv', 'MChannel', 'MChannel', 'KAN', 'KAN'],
             decoder_types=['Conv', 'MChannel', 'MChannel', 'KAN', 'KAN'],
             down_sample_first=True,
@@ -75,7 +75,7 @@ class MambaAllTrainer(MambaUKanTrainer):
                                                             n_stages=5,
                                                             print_args=True)
 
-        network = MambaUKan(
+        network = SKIM_UNet(
             encoder_types=['Conv', 'MChannel', 'MChannel', 'MChannel', 'MChannel'],
             decoder_types=['Conv', 'MChannel', 'MChannel', 'MChannel', 'MChannel'],
             down_sample_first=True,
@@ -111,7 +111,7 @@ class ResMambaAllTrainer(MambaUKanTrainer):
                                                             n_stages=5,
                                                             print_args=True)
 
-        network = MambaUKan(
+        network = SKIM_UNet(
             encoder_types=['Conv', 'MChannel', 'MChannel', 'MChannel', 'MChannel'],
             decoder_types=['Conv', 'MChannel', 'MChannel', 'MChannel', 'MChannel'],
             down_sample_first=True,
@@ -148,7 +148,7 @@ class SFMambaUKanTrainer(MambaUKanTrainer):
                                                             n_stages=5,
                                                             print_args=True)
 
-        network = MambaUKan(
+        network = SKIM_UNet(
             select_fusion=True,
             skip_merge_type=None,
             **architecture_kwargs

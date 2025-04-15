@@ -19,8 +19,8 @@ def get_base_folder():
 my_folder = get_base_folder()
 predict_folder = join(my_folder, 'predict')  # 存放模型预测结果。
 predict_train_folder = join(my_folder, 'predict_train')  # 存放模型预测结果。
-val_id_set = [4, 6, 38, 42, 59, 62, 65, 68, 70, 78, 79]  # 测试集的 id。
-test_id_set = [2, 3, 10, 12, 13, 15, 20, 28, 32, 34, 36, 37, 44, 47, 48, 57, 61, 71, 73, 76]  # 测试集的 id。
+val_id_set = []  # 测试集的 id。
+test_id_set = []  # 测试集的 id。
 
 # 任务设置相关
 config_list = []

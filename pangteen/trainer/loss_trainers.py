@@ -9,7 +9,7 @@ from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
 from nnunetv2.utilities.helpers import softmax_helper_dim1
 from pangteen.loss.combine_loss import DC_and_CE_and_Focal_loss
 from pangteen.loss.uumamba import AutoWeighted_DC_and_CE_and_Focal_loss
-from pangteen.network.ptnet.mamba_ukan import MambaUKan
+from pangteen.network.ptnet.mamba_ukan import SKIM_UNet
 from pangteen.trainer.trainers import HTTrainer
 
 
@@ -47,7 +47,7 @@ class DiceCEFocalTrainer(HTTrainer):
                                                             enable_deep_supervision,
                                                             print_args=True)
 
-        network = MambaUKan(
+        network = SKIM_UNet(
             encoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
             decoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
             select_fusion=True,
@@ -89,7 +89,7 @@ class DiceTrainer(HTTrainer):
                                                             enable_deep_supervision,
                                                             print_args=True)
 
-        network = MambaUKan(
+        network = SKIM_UNet(
             encoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
             decoder_types=['Conv', 'Conv', 'Conv', 'Conv', 'KAN', 'KAN'],
             select_fusion=True,
